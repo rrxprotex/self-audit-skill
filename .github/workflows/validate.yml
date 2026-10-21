@@ -24,10 +24,41 @@ jobs:
       - name: Validate plugin manifest
         run: claude plugin validate . --strict --json
 
-      - name: Validate skill directory
-        run: claude plugin validate ./skills/self-audit --strict --json
+      - name: Validate skill frontmatter structure
+        run: |
+          # Validate skill frontmatter manually (skills don't use plugin validate)
+          SKILL_DIR="./skills/self-audit"
+          SKILL_FILE="$SKILL_DIR/SKILL.md"
 
-      - name: Validate skill frontmatter with skills-ref
+          if [ ! -f "$SKILL_FILE" ]; then
+            echo "ERROR: SKILL.md not found at $SKILL_FILE"
+            exit 1
+          fi
+
+          # Check frontmatter exists and has required fields
+          head -30 "$SKILL_FILE" | grep -q "^---$" || { echo "ERROR: Frontmatter missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^name: self-audit$" || { echo "ERROR: name field missing or incorrect"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^description:" || { echo "ERROR: description field missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^when_to_use:" || { echo "ERROR: when_to_use field missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^arguments:" || { echo "ERROR: arguments field missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^allowed-tools:" || { echo "ERROR: allowed-tools field missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^model:" || { echo "ERROR: model field missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^effort:" || { echo "ERROR: effort field missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^context: fork$" || { echo "ERROR: context must be fork"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^background: true$" || { echo "ERROR: background must be true"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^metadata:" || { echo "ERROR: metadata field missing"; exit 1; }
+
+          # Validate metadata fields
+          head -30 "$SKILL_FILE" | grep -q "^  category:" || { echo "ERROR: metadata.category missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^  tags:" || { echo "ERROR: metadata.tags missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^  version:" || { echo "ERROR: metadata.version missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^  min-claude-version:" || { echo "ERROR: metadata.min-claude-version missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^license:" || { echo "ERROR: license field missing"; exit 1; }
+          head -30 "$SKILL_FILE" | grep -q "^compatibility:" || { echo "ERROR: compatibility field missing"; exit 1; }
+
+          echo "Skill frontmatter validation passed"
+
+      - name: Validate skill frontmatter with skills-ref (optional)
         run: |
           # Install skills-ref validator if available
           pip install -e git+https://github.com/agentskills/agentskills.git#subdirectory=skills-ref --quiet 2>/dev/null || true
