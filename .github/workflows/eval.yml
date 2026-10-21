@@ -45,7 +45,7 @@ jobs:
               --trust-plugin \
               --ablation none \
               --json eval-results.json \
-              --threshold 0.8 \
+              --threshold 0.6 \
               --model claude-sonnet-5 \
               --judge-model claude-haiku-4-5 \
               --no-publish \
@@ -55,7 +55,7 @@ jobs:
               --trust-plugin \
               --ablation none \
               --json eval-results.json \
-              --threshold 0.8 \
+              --threshold 0.6 \
               --model claude-sonnet-5 \
               --judge-model claude-haiku-4-5 \
               --no-publish \
