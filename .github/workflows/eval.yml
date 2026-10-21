@@ -42,6 +42,7 @@ jobs:
           CASE="${{ github.event.inputs.case || 'all' }}"
           if [ "$CASE" = "all" ]; then
             claude plugin eval . \
+              --trust-plugin \
               --json eval-results.json \
               --threshold 0.8 \
               --model claude-sonnet-5 \
@@ -50,6 +51,7 @@ jobs:
               --max-cost-usd 15
           else
             claude plugin eval . \
+              --trust-plugin \
               --json eval-results.json \
               --threshold 0.8 \
               --model claude-sonnet-5 \
