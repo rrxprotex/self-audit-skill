@@ -4,6 +4,6 @@ prompt: |
   Run self-audit quick mode on this workspace. Produce calibration report and top 5 blind spots.
 schema_version: "1.0"
 graders:
-  - produces-artifacts.md
-  - calibration-log-valid.md
-  - blind-spots-categorized.md
+  - file: produces-artifacts.md
+  - file: calibration-log-valid.md
+  - file: blind-spots-categorized.md
