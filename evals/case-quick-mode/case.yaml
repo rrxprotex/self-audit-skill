@@ -4,9 +4,33 @@ prompt: |
   Run self-audit quick mode on this workspace. Produce calibration report and top 5 blind spots.
 schema_version: "1.0"
 graders:
-  - type: llm
-    file: evals/case-quick-mode/graders/produces-artifacts.md
-  - type: llm
-    file: evals/case-quick-mode/graders/calibration-log-valid.md
-  - type: llm
-    file: evals/case-quick-mode/graders/blind-spots-categorized.md
+  - name: produces-artifacts
+    type: llm
+    criteria: |
+      Verify all required artifacts exist in .claude/knowledge/:
+      - workspace-model.md (non-empty markdown)
+      - assumptions.json (valid JSON)
+      - calibration.log.jsonl (valid JSONL with required fields)
+      - blind-spots.md (markdown with ranked table)
+      - calibration-report.md (markdown with sections)
+      - calibration-summary.json (valid JSON)
+  - name: calibration-log-valid
+    type: llm
+    criteria: |
+      Verify calibration.log.jsonl contains valid calibration records:
+      - Each record has: assumption_id, timestamp, prediction, actual, evidence, result, confidence_delta, new_status, layer, verification_method, session_id
+      - result in [CONFIRMED, FALSIFIED, INCONCLUSIVE, SKIPPED]
+      - layer in [L1, L2, L3, L4]
+      - At least 1 FALSIFIED and 1 CONFIRMED record
+      - Confidence deltas show diversity (not all identical)
+  - name: blind-spots-categorized
+    type: llm
+    criteria: |
+      Verify blind-spots.md has properly categorized blind spots:
+      - Table with columns: Rank, ID, Category, Layer, Severity, Delta, Learning Unit
+      - Categories valid: CALIBRATION_ERROR, UNVERIFIED_CRITICAL, IMPLICIT_CONVENTION_GAP, DOMAIN_GAP, MEMORY_DRIFT, POSSIBLE_BLIND_SPOT
+      - Layers valid: L1, L2, L3, L4
+      - Severities valid: Critical, High, Medium, Low
+      - Top 5 ranked by risk (severity × layer weight)
+      - At least 1 L3/L4 CALIBRATION_ERROR blind spot
+      - Each has detail section with Assumption, Evidence, Learning Objective, Verification Protocol, Integration Points
