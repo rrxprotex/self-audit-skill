@@ -43,6 +43,7 @@ jobs:
           if [ "$CASE" = "all" ]; then
             claude plugin eval . \
               --trust-plugin \
+              --ablation none \
               --json eval-results.json \
               --threshold 0.8 \
               --model claude-sonnet-5 \
@@ -52,6 +53,7 @@ jobs:
           else
             claude plugin eval . \
               --trust-plugin \
+              --ablation none \
               --json eval-results.json \
               --threshold 0.8 \
               --model claude-sonnet-5 \
