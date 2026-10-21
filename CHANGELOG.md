@@ -1,0 +1,40 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2026-10-22
+
+### Added
+- Initial release of Self-Audit skill for Claude Code
+- 6-phase epistemic calibration pipeline (Workspace Map → Assumption Extraction → Calibration Tests → Blind Spot Map → Learnable Units → Knowledge Base Update → Calibration Report)
+- 3 depth modes: Quick (5-10 min), Standard (20-30 min), Deep (45-60+ min)
+- Abstraction layer classification (L1 Syntax, L2 Pattern, L3 Architecture, L4 Domain)
+- Epistemic status taxonomy (FACT, WORKSPACE_CONVENTION, ASSUMED_FACT, UNVERIFIED_PATTERN, IMPLICIT_CONVENTION, DOMAIN_GAP, CALIBRATION_ERROR, SPECULATION)
+- Persistent calibration log (append-only JSONL) with confidence vs accuracy tracking
+- Cross-model adversarial validation (Deep mode)
+- Historical calibration trend analysis (Deep mode)
+- Project memory system integration (`.claude/projects/<proj>/memory/`)
+- CLI wrapper scripts: `run-self-audit.py`, `calibration-analytics.py`, `validate-assumptions.py`
+- Output artifact templates: workspace-model, assumptions, blind-spots, learning-unit
+- Eval cases for quick and deep modes with graders
+- CI/CD workflows: validate, eval, release
+- Comprehensive documentation: reference, examples, architecture, configuration, integration, troubleshooting
+- Integration points with `using-agent-skills`, `doubt-driven-development`, `context-engineering`, `universal-brainstorming`, `spec-driven-development`, `code-review-and-quality`, `planning-and-task-breakdown`
+
+### Security
+- No known vulnerabilities at release
+
+---
+
+## [Unreleased]
+
+### Planned
+- Global knowledge sync mechanism (cross-project pattern sharing)
+- Web dashboard for calibration visualization
+- More language-specific convention detectors
+- Automated memory pruning for stale entries
+- Integration with `spec-driven-development` for assumption validation
+- Support for `claude plugin eval` baseline comparison

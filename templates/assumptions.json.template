@@ -1,0 +1,74 @@
+# ASSUMPTION_REGISTER Template
+
+Copy this file to `.claude/knowledge/assumptions.json` and fill in.
+
+---
+
+```json
+[
+  {
+    "id": "ASSUME-001",
+    "type": "CONVENTION|BEHAVIORAL|INVARIANT|DELEGATION|ARCHITECTURAL|DOMAIN",
+    "statement": "All config files use YAML format",
+    "source_evidence": "WORKSPACE_MODEL.conventions[0] (frequency 8)",
+    "confidence": 0.85,
+    "testable": true,
+    "layer": "L2",
+    "scope": "workspace",
+    "falsifier": "Find a non-YAML config file in active use",
+    "epistemic_status": "ASSUMED_FACT"
+  },
+  {
+    "id": "ASSUME-002",
+    "type": "ARCHITECTURAL",
+    "statement": "Workspace follows clean architecture with domain/application/infrastructure layers",
+    "source_evidence": "WORKSPACE_MODEL.structure + ADR-001",
+    "confidence": 0.9,
+    "testable": true,
+    "layer": "L3",
+    "scope": "workspace",
+    "falsifier": "Import graph shows cross-layer violations",
+    "epistemic_status": "ASSUMED_FACT"
+  },
+  {
+    "id": "ASSUME-003",
+    "type": "DOMAIN",
+    "statement": "All API responses follow {data, error} envelope pattern",
+    "source_evidence": "WORKSPACE_MODEL.domain + API docs",
+    "confidence": 0.75,
+    "testable": true,
+    "layer": "L4",
+    "scope": "workspace",
+    "falsifier": "Find an API endpoint returning raw data without envelope",
+    "epistemic_status": "ASSUMED_FACT"
+  }
+]
+```
+
+---
+
+## Field Reference
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Unique identifier, format: `ASSUME-NNN` |
+| `type` | enum | Yes | `CONVENTION`, `BEHAVIORAL`, `INVARIANT`, `DELEGATION`, `ARCHITECTURAL`, `DOMAIN` |
+| `statement` | string | Yes | The assumption in plain language |
+| `source_evidence` | string | Yes | Where this assumption came from |
+| `confidence` | number | Yes | 0.0–1.0, model's internal probability |
+| `testable` | boolean | Yes | Can be verified automatically |
+| `layer` | enum | Yes | `L1`, `L2`, `L3`, `L4` |
+| `scope` | enum | Yes | `workspace`, `universal` |
+| `falsifier` | string | Yes | How to prove this wrong |
+| `epistemic_status` | enum | Yes | `ASSUMED_FACT`, `UNVERIFIED_PATTERN` |
+
+## Assumption Type Guide
+
+| Type | Template | Example |
+|------|----------|---------|
+| CONVENTION | "All X follow pattern Y" | "All tests use `test_*.py` naming" |
+| BEHAVIORAL | "Function X does Y when Z" | "`auth.login()` returns JWT on success" |
+| INVARIANT | "Condition X never occurs" | "No raw SQL in domain layer" |
+| DELEGATION | "Library X handles Y" | "pytest-asyncio handles async tests" |
+| ARCHITECTURAL | "System follows pattern X" | "Microservices with async messaging" |
+| DOMAIN | "Domain rule X applies" | "All orders require payment confirmation" |

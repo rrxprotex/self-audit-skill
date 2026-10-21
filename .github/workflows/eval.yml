@@ -1,0 +1,106 @@
+name: Eval Suite
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 3 AM UTC
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      case:
+        description: 'Eval case to run (quick-mode, deep-mode, or all)'
+        required: false
+        default: 'all'
+        type: choice
+        options: [quick-mode, deep-mode, all]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      - name: Install plugin locally
+        run: claude plugin install . --scope project --trust-plugin
+
+      - name: Run eval suite
+        run: |
+          CASE="${{ github.event.inputs.case || 'all' }}"
+          if [ "$CASE" = "all" ]; then
+            claude plugin eval . \
+              --trust-plugin \
+              --json eval-results.json \
+              --threshold 0.8 \
+              --model claude-sonnet-5 \
+              --judge-model claude-haiku-4-5 \
+              --no-publish \
+              --max-cost-usd 15
+          else
+            claude plugin eval . \
+              --trust-plugin \
+              --json eval-results.json \
+              --threshold 0.8 \
+              --model claude-sonnet-5 \
+              --judge-model claude-haiku-4-5 \
+              --no-publish \
+              --max-cost-usd 15 \
+              --case "$CASE"
+          fi
+        shell: bash
+
+      - name: Upload eval results
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval-results.json
+          retention-days: 7
+
+      - name: Check eval threshold
+        run: |
+          python -c "
+          import json
+          with open('eval-results.json') as f:
+              results = json.load(f)
+          for case in results.get('cases', []):
+              score = case.get('score', 0)
+              threshold = case.get('threshold', 0.8)
+              status = 'PASS' if score >= threshold else 'FAIL'
+              print(f'{case[\"id\"]}: {score:.2f} ({status})')
+              if score < threshold:
+                  exit(1)
+          print('All cases passed threshold')
+          "
+        shell: bash
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('eval-results.json', 'utf8'));
+            let body = '## Eval Results\n\n';
+            for (const caseResult of results.cases) {
+              const status = caseResult.score >= caseResult.threshold ? '✅' : '❌';
+              body += `${status} **${caseResult.id}**: ${caseResult.score.toFixed(2)} / ${caseResult.threshold}\n`;
+            }
+            body += '\n*Full results uploaded as artifact.*';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

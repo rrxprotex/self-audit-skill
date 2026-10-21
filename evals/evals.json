@@ -1,0 +1,34 @@
+{
+  "evals": [
+    {
+      "id": "case-quick-mode",
+      "name": "Quick Mode Calibration",
+      "prompt_file": "case-quick-mode/prompt.md",
+      "graders": [
+        "case-quick-mode/graders/produces-artifacts.md",
+        "case-quick-mode/graders/calibration-log-valid.md",
+        "case-quick-mode/graders/blind-spots-categorized.md"
+      ],
+      "threshold": 0.8,
+      "model": "claude-sonnet-5",
+      "judge_model": "claude-haiku-4-5"
+    },
+    {
+      "id": "case-deep-mode",
+      "name": "Deep Mode with Cross-Model Validation",
+      "prompt_file": "case-deep-mode/prompt.md",
+      "graders": [
+        "case-deep-mode/graders/cross-model-validation.md",
+        "case-deep-mode/graders/trend-analysis.md"
+      ],
+      "threshold": 0.8,
+      "model": "claude-sonnet-5",
+      "judge_model": "claude-haiku-4-5"
+    }
+  ],
+  "defaults": {
+    "trust_plugin": true,
+    "no_publish": true,
+    "max_cost_usd": 10
+  }
+}

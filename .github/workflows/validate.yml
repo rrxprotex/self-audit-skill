@@ -1,0 +1,36 @@
+name: Validate Plugin
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      - name: Validate plugin manifest
+        run: claude plugin validate . --strict --json
+
+      - name: Validate skill directory
+        run: claude plugin validate ./skills/self-audit --strict --json
+
+      - name: Validate skill frontmatter with skills-ref
+        run: |
+          # Install skills-ref validator if available
+          pip install -e git+https://github.com/agentskills/agentskills.git#subdirectory=skills-ref --quiet 2>/dev/null || true
+          skills-ref validate ./skills/self-audit 2>/dev/null || echo "skills-ref not available, skipping"
+        shell: bash

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://code.claude.com/schemas/plugin.json",
+  "name": "self-audit",
+  "displayName": "Self-Audit — Epistemic Calibration",
+  "version": "1.0.0",
+  "description": "Structured epistemic calibration skill for Claude Code. Discovers implicit assumptions, tests them against workspace evidence, maps blind spots by abstraction layer, and persists calibrated knowledge for cross-session continuity.",
+  "author": { "name": "rexrayf3-prog" },
+  "homepage": "https://github.com/rexrayf3-prog/self-audit-skill",
+  "repository": "https://github.com/rexrayf3-prog/self-audit-skill",
+  "license": "MIT",
+  "keywords": ["skill", "epistemic-calibration", "workspace-analysis", "knowledge-discovery", "meta-learning", "blind-spot-detection"],
+  "defaultEnabled": true,
+  "skills": ["./skills/self-audit"],
+  "settings": {
+    "agent": { "defaultEffort": "high" }
+  }
+}

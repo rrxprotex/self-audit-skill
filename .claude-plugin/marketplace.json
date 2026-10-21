@@ -1,0 +1,17 @@
+{
+  "name": "self-audit-marketplace",
+  "owner": { "name": "rexrayf3-prog", "url": "https://github.com/rexrayf3-prog" },
+  "plugins": [
+    {
+      "name": "self-audit",
+      "source": "./",
+      "description": "Epistemic calibration & workspace knowledge discovery skill",
+      "category": "meta-learning",
+      "tags": ["epistemic-calibration", "workspace-analysis", "knowledge-discovery"],
+      "strict": true,
+      "defaultEnabled": true,
+      "displayName": "Self-Audit — Epistemic Calibration"
+    }
+  ],
+  "description": "Self-Audit skill for Claude Code — continuous epistemic hygiene for the model-workspace interface"
+}
