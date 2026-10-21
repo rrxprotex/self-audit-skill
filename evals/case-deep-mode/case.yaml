@@ -2,6 +2,7 @@ name: case-deep-mode
 description: Deep mode calibration includes cross-model validation and trend analysis
 prompt: |
   Run self-audit deep mode with cross-model validation. Include trend analysis from prior calibration.log.
+schema_version: "1.0"
 graders:
   - cross-model-validation.md
   - trend-analysis.md

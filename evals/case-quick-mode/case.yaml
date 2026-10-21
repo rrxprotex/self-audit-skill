@@ -2,6 +2,7 @@ name: case-quick-mode
 description: Quick mode calibration produces all required artifacts
 prompt: |
   Run self-audit quick mode on this workspace. Produce calibration report and top 5 blind spots.
+schema_version: "1.0"
 graders:
   - produces-artifacts.md
   - calibration-log-valid.md
