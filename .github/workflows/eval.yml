@@ -32,8 +32,10 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@latest
 
-      - name: Install plugin locally
-        run: claude plugin install . --scope project
+      - name: Add marketplace and install plugin
+        run: |
+          claude plugin marketplace add rrxprotex/self-audit-skill --scope project
+          claude plugin install self-audit@self-audit-marketplace
 
       - name: Run eval suite
         run: |
