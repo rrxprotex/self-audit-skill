@@ -4,5 +4,7 @@ prompt: |
   Run self-audit deep mode with cross-model validation. Include trend analysis from prior calibration.log.
 schema_version: "1.0"
 graders:
-  - file: cross-model-validation.md
-  - file: trend-analysis.md
+  - type: llm
+    file: evals/case-deep-mode/graders/cross-model-validation.md
+  - type: llm
+    file: evals/case-deep-mode/graders/trend-analysis.md
