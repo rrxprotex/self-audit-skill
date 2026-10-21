@@ -1,6 +1,6 @@
 {
   "name": "self-audit-marketplace",
-  "owner": { "name": "rexrayf3-prog", "url": "https://github.com/rexrayf3-prog" },
+  "owner": { "name": "rrxprotex", "url": "https://github.com/rrxprotex" },
   "plugins": [
     {
       "name": "self-audit",

@@ -2,8 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blue.svg)](https://docs.anthropic.com/en/docs/claude-code/skills)
-[![Validation](https://github.com/rexrayf3-prog/self-audit-skill/actions/workflows/validate.yml/badge.svg)](https://github.com/rexrayf3-prog/self-audit-skill/actions/workflows/validate.yml)
-[![Evals](https://github.com/rexrayf3-prog/self-audit-skill/actions/workflows/eval.yml/badge.svg)](https://github.com/rexrayf3-prog/self-audit-skill/actions/workflows/eval.yml)
+[![Validation](https://github.com/rrxprotex/self-audit-skill/actions/workflows/validate.yml/badge.svg)](https://github.com/rrxprotex/self-audit-skill/actions/workflows/validate.yml)
+[![Evals](https://github.com/rrxprotex/self-audit-skill/actions/workflows/eval.yml/badge.svg)](https://github.com/rrxprotex/self-audit-skill/actions/workflows/eval.yml)
 
 > **Continuous epistemic hygiene for the model-workspace interface.**
 
@@ -38,14 +38,14 @@ These **unknown unknowns** cause repeated surprises, wasted effort, and architec
 ### Install (One-liner, requires Claude Code v2.1.292+)
 
 ```bash
-claude plugin install self-audit@rexrayf3-prog/self-audit-skill --marketplace rexrayf3-prog/self-audit-skill
+claude plugin install self-audit@rrxprotex/self-audit-skill --marketplace rrxprotex/self-audit-skill
 ```
 
 ### Or Two-Step
 
 ```bash
 # Add marketplace
-claude plugin marketplace add rexrayf3-prog/self-audit-skill --scope project
+claude plugin marketplace add rrxprotex/self-audit-skill --scope project
 
 # Install skill
 claude plugin install self-audit@self-audit-marketplace
