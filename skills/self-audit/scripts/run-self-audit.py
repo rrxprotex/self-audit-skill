@@ -6,6 +6,7 @@ This script is invoked by the skill via allowed-tools Bash substitution.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -801,7 +802,7 @@ class SelfAuditCLI:
         """Detect tech stack."""
         stack = {"languages": [], "frameworks": [], "build_tools": [], "test_runners": [], "linters": [], "type_checkers": []}
 
-        # Language detection
+        # Language detection — manifest files first (high signal)...
         if (self.workspace / "pyproject.toml").exists() or (self.workspace / "requirements.txt").exists():
             stack["languages"].append("Python")
         if (self.workspace / "package.json").exists():
@@ -810,6 +811,13 @@ class SelfAuditCLI:
             stack["languages"].append("Go")
         if (self.workspace / "Cargo.toml").exists():
             stack["languages"].append("Rust")
+
+        # ...then by file-extension scan, so Java/C#/PHP/Ruby/Kotlin/Swift etc.
+        # are detected even without a familiar manifest file.
+        ext_langs = self._detect_languages()
+        for lang, info in ext_langs.items():
+            if info["label"] not in stack["languages"]:
+                stack["languages"].append(f"{info['label']} ({info['file_count']} files)")
 
         # Framework detection (simplified)
         if (self.workspace / "pyproject.toml").exists():
@@ -859,49 +867,159 @@ class SelfAuditCLI:
 
         return structure
 
+    # ---- Language profiles for multi-language convention detection ----
+    # Each language maps file extensions to its id, and a set of regex patterns
+    # that capture its idiomatic conventions (error handling, tests, etc.).
+    _LANGUAGE_PROFILES = {
+        "python": {
+            "label": "Python",
+            "extensions": [".py"],
+            "error_pattern": r"\btry\s*:",
+            "test_globs": ["test_*.py", "*_test.py"],
+            "test_marker": None,
+        },
+        "typescript": {
+            "label": "TypeScript/JavaScript",
+            "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+            "error_pattern": r"\bcatch\s*\(",
+            "test_globs": ["*.test.ts", "*.test.tsx", "*.test.js", "*.spec.ts", "*.spec.js"],
+            "test_marker": None,
+        },
+        "go": {
+            "label": "Go",
+            "extensions": [".go"],
+            "error_pattern": r"if\s+err\s*!=\s*nil",
+            "test_globs": ["*_test.go"],
+            "test_marker": None,
+        },
+        "rust": {
+            "label": "Rust",
+            "extensions": [".rs"],
+            "error_pattern": r"->\s*Result<|\.unwrap\(\)|\bmatch\s+.*\{",
+            "test_globs": [],
+            "test_marker": "#[test]",
+        },
+        "java": {
+            "label": "Java",
+            "extensions": [".java"],
+            "error_pattern": r"\bcatch\s*\(",
+            "test_globs": [],
+            "test_marker": "@Test",
+        },
+        "kotlin": {
+            "label": "Kotlin",
+            "extensions": [".kt", ".kts"],
+            "error_pattern": r"\bcatch\s*\(",
+            "test_globs": [],
+            "test_marker": "@Test",
+        },
+        "csharp": {
+            "label": "C#",
+            "extensions": [".cs"],
+            "error_pattern": r"\bcatch\s*\(",
+            "test_globs": [],
+            "test_marker": "[Test]",
+        },
+        "ruby": {
+            "label": "Ruby",
+            "extensions": [".rb"],
+            "error_pattern": r"\brescue\b",
+            "test_globs": ["*_spec.rb", "*_test.rb"],
+            "test_marker": None,
+        },
+        "php": {
+            "label": "PHP",
+            "extensions": [".php"],
+            "error_pattern": r"\bcatch\s*\(",
+            "test_globs": ["*Test.php"],
+            "test_marker": None,
+        },
+        "swift": {
+            "label": "Swift",
+            "extensions": [".swift"],
+            "error_pattern": r"\bdo\s*\{|\bthrows\b|\btry\b",
+            "test_globs": [],
+            "test_marker": "func test",
+        },
+    }
+
+    def _detect_languages(self) -> Dict[str, Dict]:
+        """Detect present languages by file-extension scan (not just manifest files)."""
+        found = {}
+        # Count files per language extension
+        for lang, profile in self._LANGUAGE_PROFILES.items():
+            count = 0
+            for ext in profile["extensions"]:
+                count += len(list(self.workspace.rglob(f"*{ext}")))
+            if count > 0:
+                found[lang] = {"label": profile["label"], "file_count": count}
+        return found
+
     def _sample_conventions(self) -> List[Dict]:
-        """Sample high-signal conventions."""
+        """Sample high-signal conventions across all detected languages."""
         conventions = []
 
-        # Config convention
+        # Config convention (language-neutral)
         yaml_count = len(list(self.workspace.rglob("*.yaml"))) + len(list(self.workspace.rglob("*.yml")))
         json_count = len(list(self.workspace.rglob("*.json")))
-        if yaml_count > 0 or json_count > 0:
+        toml_count = len(list(self.workspace.rglob("*.toml")))
+        cfg_total = yaml_count + json_count + toml_count
+        if cfg_total > 0:
+            dominant = "YAML" if yaml_count >= json_count and yaml_count >= toml_count else "JSON" if json_count >= toml_count else "TOML"
             conventions.append({
-                "pattern": "config files use YAML/JSON",
-                "frequency": yaml_count + json_count,
+                "pattern": f"config files use {dominant} (yaml={yaml_count}, json={json_count}, toml={toml_count})",
+                "frequency": cfg_total,
                 "exceptions": [],
                 "status": "UNVERIFIED_PATTERN",
                 "evidence_files": []
             })
 
-        # Error handling pattern detection
-        try_count = 0
-        for py_file in self.workspace.rglob("*.py"):
-            try:
-                content = py_file.read_text()
-                try_count += content.count("try:")
-            except:
-                pass
-        if try_count > 0:
-            conventions.append({
-                "pattern": "error handling uses try/except",
-                "frequency": try_count,
-                "exceptions": [],
-                "status": "UNVERIFIED_PATTERN",
-                "evidence_files": []
-            })
+        # Per-language convention sampling
+        for lang, profile in self._LANGUAGE_PROFILES.items():
+            exts = profile["extensions"]
+            # --- error handling idiom ---
+            err_hits = 0
+            err_files = []
+            for f in self.workspace.rglob("*"):
+                if f.is_file() and f.suffix in exts:
+                    try:
+                        content = f.read_text(encoding="utf-8", errors="ignore")
+                        hits = len(re.findall(profile["error_pattern"], content))
+                        if hits:
+                            err_hits += hits
+                            if len(err_files) < 3:
+                                err_files.append(str(f.relative_to(self.workspace)))
+                    except Exception:
+                        pass
+            if err_hits > 0:
+                conventions.append({
+                    "pattern": f"{profile['label']} error handling idiom",
+                    "frequency": err_hits,
+                    "exceptions": [],
+                    "status": "UNVERIFIED_PATTERN",
+                    "evidence_files": err_files
+                })
 
-        # Test convention
-        test_files = len(list(self.workspace.rglob("test_*.py"))) + len(list(self.workspace.rglob("*_test.py")))
-        if test_files > 0:
-            conventions.append({
-                "pattern": "tests follow test_* naming",
-                "frequency": test_files,
-                "exceptions": [],
-                "status": "UNVERIFIED_PATTERN",
-                "evidence_files": []
-            })
+            # --- test naming / marker convention ---
+            test_files = 0
+            for glob in profile["test_globs"]:
+                test_files += len(list(self.workspace.rglob(glob)))
+            if profile["test_marker"]:
+                for f in self.workspace.rglob("*"):
+                    if f.is_file() and f.suffix in exts:
+                        try:
+                            if profile["test_marker"] in f.read_text(encoding="utf-8", errors="ignore"):
+                                test_files += 1
+                        except Exception:
+                            pass
+            if test_files > 0:
+                conventions.append({
+                    "pattern": f"{profile['label']} test convention",
+                    "frequency": test_files,
+                    "exceptions": [],
+                    "status": "UNVERIFIED_PATTERN",
+                    "evidence_files": []
+                })
 
         return conventions
 
