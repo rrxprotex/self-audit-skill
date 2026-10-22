@@ -31,6 +31,10 @@ class SelfAuditCLI:
         self.cross_model_reviewers = max(1, int(os.getenv("SELF_AUDIT_CROSS_MODEL_REVIEWERS", "2") or 2))
         self.trend_min_sessions = max(1, int(os.getenv("SELF_AUDIT_TREND_MIN_SESSIONS", "2") or 2))
         self.user_context = os.getenv("SELF_AUDIT_USER_CONTEXT", "false").lower() == "true"
+        # Scope & stakes (SKILL.md §7) — what is being audited, and the verification budget.
+        self.target = os.getenv("SELF_AUDIT_TARGET", "workspace")
+        self.stakes = os.getenv("SELF_AUDIT_STAKES", "medium")
+        self.mode = os.getenv("SELF_AUDIT_MODE", "deep")
 
     def _project_slug(self) -> str:
         """Generate a safe slug from workspace path."""
@@ -47,6 +51,8 @@ class SelfAuditCLI:
         print(f"   Knowledge root: {self.knowledge_root}")
         print(f"   Memory root: {self.memory_root}")
         print(f"   Mode: {args.mode}")
+        print(f"   Target: {self.target} | Stakes: {self.stakes}")
+        self.mode = args.mode
 
         if args.mode == "quick":
             return self._run_quick_mode()
@@ -173,6 +179,8 @@ class SelfAuditCLI:
 
         model = {
             "domain": self._detect_domain(),
+            "target": self.target,
+            "stakes": self.stakes,
             "stack": self._detect_stack(),
             "structure": self._inventory_structure(),
             "conventions": self._sample_conventions(),
@@ -1481,7 +1489,9 @@ metadata:
         """Format machine-readable summary."""
         return {
             "skill": "self-audit",
-            "mode": "quick",
+            "mode": getattr(self, "mode", os.getenv("SELF_AUDIT_MODE", "deep")),
+            "target": self.target,
+            "stakes": self.stakes,
             "workspace": str(self.workspace),
             "session_id": self.session_id,
             "timestamp": datetime.now().isoformat(),
@@ -1511,9 +1521,13 @@ metadata:
 
 def main():
     parser = argparse.ArgumentParser(description="Self-Audit: Epistemic calibration for any workspace")
-    parser.add_argument("--mode", choices=["quick", "standard", "deep"],
-                        default=os.getenv("SELF_AUDIT_MODE", "deep"))
+    parser.add_argument("--mode", choices=["quick", "standard", "deep"], default=None,
+                        help="Depth mode (default: derived from --stakes, else SELF_AUDIT_MODE, else deep)")
     parser.add_argument("--workspace", default=None)
+    parser.add_argument("--target", choices=["workspace", "plan", "diff", "last-answer"], default=None,
+                        help="What is being audited (SKILL.md §7; default: workspace)")
+    parser.add_argument("--stakes", choices=["low", "medium", "high"], default=None,
+                        help="Verification budget (SKILL.md §7; default: medium; sets the default mode)")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--no-cross-model", action="store_true")
     parser.add_argument("--no-trend", action="store_true")
@@ -1525,6 +1539,10 @@ def main():
     # Apply CLI args to environment BEFORE initializing CLI
     if args.workspace:
         os.environ["SELF_AUDIT_WORKSPACE"] = args.workspace
+    if args.target:
+        os.environ["SELF_AUDIT_TARGET"] = args.target
+    if args.stakes:
+        os.environ["SELF_AUDIT_STAKES"] = args.stakes
     if args.output_dir:
         os.environ["SELF_AUDIT_KNOWLEDGE_ROOT"] = args.output_dir
     if args.no_cross_model:
@@ -1535,6 +1553,15 @@ def main():
         os.environ["SELF_AUDIT_USER_CONTEXT"] = "true"
     if args.verbose:
         os.environ["SELF_AUDIT_VERBOSE"] = "true"
+
+    # Mode resolution (SKILL.md §7): explicit --mode wins; else explicit --stakes
+    # picks the default mode (low->quick, medium->standard, high->deep);
+    # else SELF_AUDIT_MODE env; else deep (backward-compatible default).
+    if args.mode is None:
+        if args.stakes:
+            args.mode = {"low": "quick", "medium": "standard", "high": "deep"}[args.stakes]
+        else:
+            args.mode = os.getenv("SELF_AUDIT_MODE", "deep")
 
     cli = SelfAuditCLI()
     sys.exit(cli.run(args))

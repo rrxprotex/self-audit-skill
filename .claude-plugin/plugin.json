@@ -2,7 +2,7 @@
   "$schema": "https://code.claude.com/schemas/plugin.json",
   "name": "self-audit",
   "displayName": "Self-Audit — Epistemic Calibration",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Structured epistemic calibration skill for Claude Code. Discovers implicit assumptions, tests them against workspace evidence, maps blind spots by abstraction layer, and persists calibrated knowledge for cross-session continuity.",
   "author": { "name": "rrxprotex" },
   "homepage": "https://github.com/rrxprotex/self-audit-skill",

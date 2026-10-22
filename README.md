@@ -160,6 +160,10 @@ claude plugin install self-audit@self-audit-marketplace
 # Also discover & calibrate what the user needs/intends/knows (user-context)
 /self-audit --mode deep --user-context
 
+# Audit a plan or a diff instead of the workspace (stakes set the budget)
+/self-audit --target plan --stakes high "the plan text or a path"
+/self-audit --target diff --stakes high
+
 # Custom workspace / output
 /self-audit --mode deep --workspace /path/to/project --output-dir /custom/knowledge
 ```
@@ -174,9 +178,13 @@ python skills/self-audit/scripts/run-self-audit.py --mode deep --workspace /path
 
 ```text
 usage: run-self-audit.py [-h] [--mode {quick,standard,deep}]
-                         [--workspace WORKSPACE] [--output-dir OUTPUT_DIR]
+                         [--workspace WORKSPACE]
+                         [--target {workspace,plan,diff,last-answer}]
+                         [--stakes {low,medium,high}] [--output-dir OUTPUT_DIR]
                          [--no-cross-model] [--no-trend] [--user-context] [--verbose]
 ```
+
+`--stakes` sets the verification budget and picks the default mode (`low→quick`, `medium→standard`, `high→deep`); an explicit `--mode` overrides it.
 
 ### Visualize the calibration data
 
@@ -199,6 +207,8 @@ Control the run through environment variables — this is what makes it portable
 | `SELF_AUDIT_KNOWLEDGE_ROOT` | `<workspace>/.claude/knowledge/` | Where artifacts are written |
 | `SELF_AUDIT_MEMORY_ROOT` | `<workspace>/.claude/projects/<slug>/memory/` | Memory system root |
 | `SELF_AUDIT_MODE` | `deep` | Default depth mode (`quick` / `standard` / `deep`) |
+| `SELF_AUDIT_TARGET` | `workspace` | What is being audited (`workspace` / `plan` / `diff` / `last-answer`) |
+| `SELF_AUDIT_STAKES` | `medium` | Verification budget (`low` / `medium` / `high`); sets default mode |
 | `SELF_AUDIT_CROSS_MODEL` | `true` | Cross-model validation (deep mode) |
 | `SELF_AUDIT_TREND_ANALYSIS` | `true` | Historical trend analysis (deep mode) |
 | `SELF_AUDIT_VERBOSE` | `false` | Verbose logging (per-assumption evidence + blind-spot details) |
