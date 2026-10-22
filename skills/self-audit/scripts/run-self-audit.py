@@ -18,6 +18,9 @@ class SelfAuditCLI:
         self.workspace = Path(os.getenv("SELF_AUDIT_WORKSPACE", os.getenv("CLAUDE_PROJECT_DIR", "."))).resolve()
         self.knowledge_root = Path(os.getenv("SELF_AUDIT_KNOWLEDGE_ROOT", self.workspace / ".claude" / "knowledge")).resolve()
         self.memory_root = Path(os.getenv("SELF_AUDIT_MEMORY_ROOT", self.workspace / ".claude" / "projects" / self._project_slug() / "memory")).resolve()
+        # Real, unique session id — one per run. Trend analysis groups by this,
+        # so it must actually differ across runs (not a hardcoded demo value).
+        self.session_id = os.getenv("SELF_AUDIT_SESSION_ID") or f"session-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
     def _project_slug(self) -> str:
         """Generate a safe slug from workspace path."""
@@ -266,7 +269,7 @@ class SelfAuditCLI:
                     "new_status": "PERSISTENT_CALIBRATION_ERROR",
                     "layer": assumption["layer"],
                     "verification_method": "prior_session",
-                    "session_id": f"session-{datetime.now().strftime('%Y%m%d')}"
+                    "session_id": self.session_id
                 })
                 print(f"    [SKIP] {assumption['id']}: KNOWN FALSE (from prior sessions)")
                 continue
@@ -707,10 +710,13 @@ class SelfAuditCLI:
             trend = "INSUFFICIENT_DATA"
 
         # Overall calibration
-        all_deltas = [abs(r.get("confidence_delta", 0)) for r in records]
+        # Keep the sign: a negative delta = overconfident (stated > actual),
+        # a positive delta = underconfident. abs() is only for magnitude stats.
+        signed_deltas = [r.get("confidence_delta", 0) for r in records]
+        all_deltas = [abs(d) for d in signed_deltas]
         mean_delta = sum(all_deltas) / len(all_deltas) if all_deltas else 0
-        overconfident = sum(1 for d in all_deltas if d < -0.3)
-        underconfident = sum(1 for d in all_deltas if d > 0.3)
+        overconfident = sum(1 for d in signed_deltas if d < -0.3)
+        underconfident = sum(1 for d in signed_deltas if d > 0.3)
         overconf_rate = overconfident / len(records) if records else 0
         underconf_rate = underconfident / len(records) if records else 0
 
@@ -967,7 +973,7 @@ class SelfAuditCLI:
                 "new_status": "CALIBRATION_ERROR",
                 "layer": assumption["layer"],
                 "verification_method": "import_graph_analysis",
-                "session_id": "demo-session"
+                "session_id": self.session_id
             }
         elif assumption["layer"] == "L2" and "Result" in assumption["statement"]:
             return {
@@ -981,7 +987,7 @@ class SelfAuditCLI:
                 "new_status": "CALIBRATION_ERROR",
                 "layer": assumption["layer"],
                 "verification_method": "grep",
-                "session_id": "demo-session"
+                "session_id": self.session_id
             }
         elif random.random() < 0.7:
             return {
@@ -995,7 +1001,7 @@ class SelfAuditCLI:
                 "new_status": "WORKSPACE_CONVENTION",
                 "layer": assumption["layer"],
                 "verification_method": "grep",
-                "session_id": "demo-session"
+                "session_id": self.session_id
             }
         else:
             return {
@@ -1009,7 +1015,7 @@ class SelfAuditCLI:
                 "new_status": "UNVERIFIED_PATTERN",
                 "layer": assumption["layer"],
                 "verification_method": "grep",
-                "session_id": "demo-session"
+                "session_id": self.session_id
             }
 
     def _compute_calibration_curve(self, calibration_log: List[Dict]) -> Dict:
@@ -1134,7 +1140,7 @@ metadata:
             "skill": "self-audit",
             "mode": "quick",
             "workspace": str(self.workspace),
-            "session_id": "demo-session",
+            "session_id": self.session_id,
             "timestamp": datetime.now().isoformat(),
             "assumptions_tested": len(calibration_log),
             "confirmed": sum(1 for r in calibration_log if r["result"] == "CONFIRMED"),
