@@ -17,9 +17,7 @@ on:
 jobs:
   eval:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,38 +30,18 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@latest
 
+      - name: Install Python dependencies
+        run: pip install pyyaml jsonschema --quiet
+
       - name: Add marketplace and install plugin
         run: |
           claude plugin marketplace add rrxprotex/self-audit-skill --scope project
           claude plugin install self-audit@self-audit-marketplace
 
-      - name: Run eval suite
+      - name: Run model-agnostic eval suite
         run: |
-          CASE="${{ github.event.inputs.case || 'all' }}"
-          if [ "$CASE" = "all" ]; then
-            claude plugin eval . \
-              --trust-plugin \
-              --ablation none \
-              --json eval-results.json \
-              --threshold 0.6 \
-              --model claude-sonnet-5 \
-              --judge-model claude-haiku-4-5 \
-              --no-publish \
-              --max-cost-usd 15
-          else
-            claude plugin eval . \
-              --trust-plugin \
-              --ablation none \
-              --json eval-results.json \
-              --threshold 0.6 \
-              --model claude-sonnet-5 \
-              --judge-model claude-haiku-4-5 \
-              --no-publish \
-              --max-cost-usd 15 \
-              --case "$CASE"
-          fi
+          python .github/scripts/eval-runner.py --case "${{ github.event.inputs.case || 'all' }}"
         shell: bash
-        continue-on-error: true
 
       - name: Upload eval results
         if: always()
@@ -85,10 +63,10 @@ jobs:
               print('No eval results file')
               sys.exit(1)
           for case in results.get('cases', []):
-              score = case.get('score', 0)
-              threshold = case.get('threshold', 0.6)
+              score = case.get('aggregates', {}).get('score', 0)
+              threshold = case.get('aggregates', {}).get('threshold', 0.6)
               status = 'PASS' if score >= threshold else 'FAIL'
-              print(f'{case[\"id\"]}: {score:.2f} ({status})')
+              print(f'{case[\"name\"]}: {score:.2f} ({status})')
               if score < threshold:
                   sys.exit(1)
           print('All cases passed threshold')
@@ -104,8 +82,8 @@ jobs:
             const results = JSON.parse(fs.readFileSync('eval-results.json', 'utf8'));
             let body = '## Eval Results\n\n';
             for (const caseResult of results.cases) {
-              const status = caseResult.score >= caseResult.threshold ? '✅' : '❌';
-              body += `${status} **${caseResult.id}**: ${caseResult.score.toFixed(2)} / ${caseResult.threshold}\n`;
+              const status = caseResult.aggregates.score >= caseResult.aggregates.threshold ? '✅' : '❌';
+              body += `${status} **${caseResult.name}**: ${caseResult.aggregates.score.toFixed(2)} / ${caseResult.aggregates.threshold}\n`;
             }
             body += '\n*Full results uploaded as artifact.*';
             github.rest.issues.createComment({
