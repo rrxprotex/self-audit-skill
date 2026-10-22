@@ -1,9 +1,9 @@
 ---
 name: self-audit
-description: Discovers what the model doesn't know it doesn't know in the workspace. Runs structured epistemic calibration: scans for implicit assumptions, tests them against evidence, maps blind spots by abstraction layer (L1-L4), synthesizes learnable units with verification protocols, persists calibrated knowledge to project memory. Use at session start, before major tasks, when confidence feels uncalibrated, or to convert workspace patterns into durable knowledge artifacts. Deep mode (default) includes cross-model adversarial validation and historical calibration trend analysis.
-when_to_use: "Starting a new session in a workspace; before major implementation tasks; when repeatedly surprised by same workspace patterns; when cross-session learning keeps resetting; when you need to audit your own knowledge boundaries before claiming expertise"
-argument-hint: "[--mode quick|standard|deep] [--workspace PATH] [--output-dir PATH]"
-arguments: "mode workspace output-dir"
+description: Discovers what the model doesn't know it doesn't know in the workspace, AND what the user needs/knows/doesn't-know about the workspace — even when they can't articulate it. Runs structured epistemic calibration: scans for implicit assumptions (model + user), tests them against evidence, maps blind spots by abstraction layer (L1-L4), discovers user intent/tacit knowledge gaps, synthesizes learnable units with verification protocols, persists calibrated knowledge to project memory. Use at session start, before major tasks, when repeatedly surprised by same workspace patterns, when cross-session learning keeps resetting, when user goals seem misaligned with workspace reality.
+when_to_use: "Starting a new session in a workspace; before major implementation tasks; when repeatedly surprised by same workspace patterns; when cross-session learning keeps resetting; when you need to audit your own knowledge boundaries before claiming expertise; when user intent is vague but workspace has strong implicit constraints; when user says 'I know what I want' but requirements keep shifting"
+argument-hint: "[--mode quick|standard|deep] [--workspace PATH] [--output-dir PATH] [--user-context]"
+arguments: "mode workspace output-dir user-context"
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: "Bash(${CLAUDE_SKILL_DIR}/scripts/run-self-audit.py *) Glob Grep Read Write Edit Task Agent"
@@ -15,8 +15,8 @@ background: true
 shell: bash
 metadata:
   category: "meta-learning"
-  tags: ["epistemic-calibration", "workspace-analysis", "knowledge-discovery", "blind-spot-detection"]
-  version: "1.0.0"
+  tags: ["epistemic-calibration", "workspace-analysis", "knowledge-discovery", "blind-spot-detection", "user-intent-modeling", "tacit-knowledge-extraction"]
+  version: "1.1.0"
   min-claude-version: "2.1.218"
 license: MIT
 compatibility: "Requires Python 3.10+, pytest, read/write access to .claude/ directory. Works on any workspace with code/docs/tests."
@@ -26,11 +26,15 @@ compatibility: "Requires Python 3.10+, pytest, read/write access to .claude/ dir
 
 ## Overview
 
-Most AI failures aren't reasoning errors — they're **calibration errors**. The model confidently assumes a pattern holds, a convention exists, or a library behaves a certain way, but the workspace reality differs. This skill makes those assumptions **explicit, testable, and learnable**.
+Most AI failures aren't reasoning errors — they're **calibration errors**. The model confidently assumes a pattern holds, a convention exists, or a library behaves a certain way, but the workspace reality differs. **Equally critical**: the user often cannot fully articulate what they need, what they know, or what constraints exist — yet the workspace encodes all of this implicitly.
 
-**Objective:** Transform "I thought X was true" into "X is false (confirmed), here's the evidence, here's the corrected pattern, and here's the memory artifact so I don't relearn it."
+This skill performs **dual calibration**:
+1. **Model calibration**: What the model assumes vs. what's actually true in the workspace
+2. **User context calibration**: What the user needs/intends/knows (even unarticulated) vs. what the workspace actually requires/constrains
 
-This is not `universal-brainstorming` (topic-driven discovery) nor `doubt-driven-development` (decision-stress-testing). This is **continuous epistemic hygiene** for the model-workspace interface.
+**Objective:** Transform "I thought X was true" into "X is false (confirmed), here's the evidence, here's the corrected pattern, and here's the memory artifact so I don't relearn it." AND transform "User said Y" into "User actually needs Z (inferred from workspace constraints, tacit patterns, and goal-task gaps), here's the verification protocol."
+
+This is not `universal-brainstorming` (topic-driven discovery) nor `doubt-driven-development` (decision-stress-testing). This is **continuous epistemic hygiene** for the model-workspace-user interface.
 
 ## When to Use
 
@@ -158,13 +162,91 @@ Default: **deep**
 
 ---
 
-### Phase 1 — ASSUMPTION EXTRACTION (Active Probe)
+### Phase 0.5 — USER CONTEXT DISCOVERY (Tacit Knowledge & Intent Modeling)
 
-**Goal:** From the workspace model, extract the model's **implicit assumptions** — things the model "knows" but hasn't verified.
+**Goal:** Discover what the user *needs*, *knows*, *assumes*, and *cannot articulate* about the workspace — by analyzing the workspace itself as a crystallization of user intent, constraints, and domain expertise.
 
-**Input:** `WORKSPACE_MODEL` + model's internal knowledge about this workspace (from prior sessions, training data patterns, etc.)
+**Rationale:** The workspace is not just code — it's a fossil record of user decisions, constraints, domain knowledge, and implicit requirements. Even when users can't articulate "I need X" or "I assume Y", the workspace structure, naming, conventions, test patterns, config choices, and documentation gaps reveal the user's true mental model and unspoken needs.
 
-**Process:** For each convention, pattern, and structural element in the workspace model, generate assumption candidates:
+**Inputs:** 
+- `WORKSPACE_MODEL` (from Phase 0)
+- User's explicit statements (if any) from conversation history
+- `.claude/` memory files, CLAUDE.md, AGENTS.md
+- Git history (commit messages, branch names, PR titles)
+- Issue tracker / TODO comments / README intent statements
+
+**Actions:**
+
+1. **User Intent Reconstruction** — Reverse-engineer user goals from workspace artifacts:
+   - **Architectural intent**: What problem is this architecture solving? (e.g., "modular monolith" → user values deployability + domain isolation)
+   - **Convention intent**: Why this naming/error/config pattern? (e.g., `Result<T,E>` everywhere → user prioritizes explicit error handling)
+   - **Test intent**: What behaviors are being protected? (e.g., contract tests → user cares about API stability)
+   - **Config intent**: What environments/deployments are targeted? (e.g., YAML + env vars → user does multi-env deployments)
+
+2. **User Knowledge Mapping** — Infer what the user *knows* vs. *assumes*:
+   - **Explicit knowledge**: Documented in ADRs, README, CLAUDE.md, code comments
+   - **Tacit knowledge**: Encoded in consistent patterns without documentation (e.g., all services use DI but no ADR says so)
+   - **Assumed knowledge**: Patterns user expects but aren't enforced (e.g., "everyone knows we use snake_case for DB columns")
+   - **Blind knowledge**: Things user *doesn't know* the workspace does (legacy patterns, deprecated paths, implicit couplings)
+
+3. **User Need Gap Analysis** — Identify what the user *needs* but hasn't expressed:
+   - **Constraint gaps**: Workspace has implicit constraints user ignores (e.g., "services must be stateless" but user adds session state)
+   - **Capability gaps**: Workspace lacks capability user implicitly assumes (e.g., user assumes "async everywhere" but sync calls exist)
+   - **Evolution gaps**: Workspace evolved past user's mental model (e.g., user thinks "clean architecture" but code is modular monolith)
+   - **Integration gaps**: User wants X but workspace requires Y (e.g., user wants GraphQL but REST contracts are hardcoded)
+
+4. **Goal-Task Misalignment Detection** — Compare user's stated goals vs. workspace reality:
+   - Parse explicit user statements: "I want to refactor auth", "Add feature X", "Make it faster"
+   - Map to workspace constraints: auth module has 50% test coverage, circular deps, no interfaces
+   - Flag mismatches: "User wants quick refactor → workspace requires 3-week stabilization first"
+
+5. **Tacit Requirement Extraction** — Find requirements the user never stated but workspace enforces:
+   - **Implicit invariants**: "No direct DB access in handlers" (enforced by convention, not linting)
+   - **Domain rules**: "All prices in cents" (encoded in types, not documented)
+   - **Security boundaries**: "PII never leaves service boundary" (enforced by architecture)
+   - **Performance budgets**: "p99 < 200ms" (encoded in test thresholds)
+
+**Output:** `USER_CONTEXT_MODEL.md` + `USER_CONTEXT_MODEL.json`
+
+```json
+{
+  "reconstructed_intent": [
+    {"aspect": "architecture", "intent": "modular monolith for deployability + domain isolation", "confidence": 0.85, "evidence": ["core/ imports runtime/", "no domain/app/infra dirs"]},
+    {"aspect": "error_handling", "intent": "explicit error handling via Result<T,E>", "confidence": 0.9, "evidence": ["30 files use Result", "2 use try/catch"]}
+  ],
+  "user_knowledge_map": {
+    "explicit": ["ADR-001: modular monolith", "README: testing strategy"],
+    "tacit": ["DI pattern in 12 services", "snake_case for DB columns"],
+    "assumed": ["async everywhere", "no circular deps"],
+    "blind": ["legacy sync calls in payments/", "deprecated v1 API still active"]
+  },
+  "need_gaps": [
+    {"gap": "constraint_gap", "description": "User adds session state but workspace assumes stateless services", "severity": "High", "layer": "L3"},
+    {"gap": "capability_gap", "description": "User assumes async everywhere; sync REST calls exist", "severity": "Critical", "layer": "L3"},
+    {"gap": "evolution_gap", "description": "User mental model: clean architecture; actual: modular monolith", "severity": "Critical", "layer": "L3"},
+    {"gap": "integration_gap", "description": "User wants GraphQL; workspace has hardcoded REST contracts", "severity": "Medium", "layer": "L2"}
+  ],
+  "goal_task_misalignments": [
+    {"user_goal": "quick auth refactor", "workspace_reality": "auth has 50% test coverage, circular deps, no interfaces", "estimated_effort_multiplier": 5, "risk": "High"}
+  ],
+  "tacit_requirements": [
+    {"requirement": "stateless_services", "evidence": "all services use DI, no singleton state", "enforcement": "convention", "falsifier": "find service with mutable instance state"},
+    {"requirement": "prices_in_cents", "evidence": "Money type used in 40 files, never float", "enforcement": "type_system", "falsifier": "find float price calculation"}
+  ]
+}
+```
+
+**Epistemic Status:** All findings here carry `USER_INFERRED` status — they are hypotheses about user mental state, not verified facts. They must be validated via Phase 2 calibration tests or explicit user confirmation.
+
+---
+
+### Phase 1 — ASSUMPTION EXTRACTION (Active Probe — Model + User)
+
+**Goal:** From the workspace model AND user context model, extract **both** the model's implicit assumptions AND the user's implicit assumptions/needs — things the model/user "know" but haven't verified.
+
+**Input:** `WORKSPACE_MODEL` + `USER_CONTEXT_MODEL` + model's internal knowledge
+
+**Process:** For each convention, pattern, structural element, AND user intent/need/tacit requirement, generate assumption candidates:
 
 | Assumption Type | Template | Example |
 |-----------------|----------|---------|
@@ -174,80 +256,103 @@ Default: **deep**
 | **Delegation** | "Library/tool X handles Y" | "pytest-asyncio handles all async test cases" |
 | **Architectural** | "System follows pattern X" | "Workspace uses clean architecture layers" |
 | **Domain** | "Domain rule X applies" | "All Turkish pop songs use 126 BPM" |
+| **USER_INTENT** | "User intends X based on workspace pattern Y" | "User intends explicit error handling via Result<T,E>" |
+| **USER_NEED** | "User needs X but workspace constrains Y" | "User needs async everywhere but sync calls exist" |
+| **USER_TACIT** | "User tacitly assumes X (encoded in workspace)" | "User assumes prices always in cents" |
+| **USER_BLIND** | "User is unaware of X in workspace" | "User unaware of legacy sync calls in payments/" |
 
 **For each assumption, record:**
 ```json
 {
   "id": "ASSUME-001",
-  "type": "CONVENTION|BEHAVIORAL|INVARIANT|DELEGATION|ARCHITECTURAL|DOMAIN",
+  "type": "CONVENTION|BEHAVIORAL|INVARIANT|DELEGATION|ARCHITECTURAL|DOMAIN|USER_INTENT|USER_NEED|USER_TACIT|USER_BLIND",
   "statement": "All config files use YAML",
   "source_evidence": "WORKSPACE_MODEL.conventions[0] (frequency 8)",
   "confidence": 0.85,
   "testable": true,
   "layer": "L2",
   "scope": "workspace",
-  "falsifier": "Find a non-YAML config file in active use"
+  "falsifier": "Find a non-YAML config file in active use",
+  "epistemic_status": "ASSUMED_FACT|USER_INFERRED"
 }
 ```
 
 **Output:** `ASSUMPTION_REGISTER.json` (array of assumption objects)
 
-**Target:** 30–100 assumptions per workspace (deep mode). Prioritize L2/L3/L4.
+**Target:** 40–150 assumptions per workspace (deep mode). Prioritize L2/L3/L4 + USER_* types.
 
 ---
 
-### Phase 2 — CALIBRATION TESTS (Verification)
+### Phase 2 — CALIBRATION TESTS (Verification — Model + User Assumptions)
 
-**Goal:** Test every `testable=true` assumption against workspace evidence.
+**Goal:** Test every `testable=true` assumption (both model and user-derived) against workspace evidence.
 
 **For each assumption in `ASSUMPTION_REGISTER` where `testable=true`:**
 
-1. **Design test** — Minimal verification step:
+1. **Design test** — Minimal verification step per type:
    - `CONVENTION` → `rg`/`grep` pattern search across relevant files
    - `BEHAVIORAL` → Run function/test, inspect return value/side effects
    - `INVARIANT` → Search for counterexamples (grep for anti-pattern)
    - `DELEGATION` → Check library docs / run minimal integration test
    - `ARCHITECTURAL` → Check import graph, directory structure, ADRs
    - `DOMAIN` → Cross-reference with domain docs, memory, examples
+   - `USER_INTENT` → Verify intent hypothesis against workspace patterns (e.g., "User intends explicit error handling" → count Result<T,E> vs try/catch)
+   - `USER_NEED` → Test gap hypothesis (e.g., "User needs async everywhere" → search for sync calls in async contexts)
+   - `USER_TACIT` → Verify tacit requirement enforcement (e.g., "User assumes prices in cents" → type-check Money usage vs float)
+   - `USER_BLIND` → Verify blind spot existence (e.g., "User unaware of legacy sync calls" → search for deprecated patterns)
 
 2. **Execute test** — Record:
-   - `prediction`: What model expected (from assumption statement)
+   - `prediction`: What model/user expected (from assumption statement)
    - `actual`: What test observed
    - `evidence`: File paths, command output, line numbers
    - `confidence_delta`: `actual_confidence - stated_confidence` (where actual_confidence = 1.0 if confirmed, 0.0 if falsified, 0.5 if inconclusive)
+   - `assumption_origin`: `model` | `user_inferred`
 
 3. **Classify result:**
-   - `CONFIRMED` → `FACT` or `WORKSPACE_CONVENTION` (confidence → 1.0)
-   - `FALSIFIED` → `CALIBRATION_ERROR` (record delta, note direction)
+   - `CONFIRMED` → `FACT` or `WORKSPACE_CONVENTION` or `USER_INTENT_VALIDATED` (confidence → 1.0)
+   - `FALSIFIED` → `CALIBRATION_ERROR` (model) or `USER_MISALIGNMENT` (user) — record delta, note direction
    - `INCONCLUSIVE` → `UNVERIFIED_PATTERN` (confidence unchanged, flag for re-test)
+   - `USER_CONFIRMED` → User explicitly validated (via conversation)
 
 **Output:** `CALIBRATION_LOG.jsonl` (append-one-per-assumption)
 ```jsonl
-{"assumption_id": "ASSUME-001", "timestamp": "2026-10-22T10:30:00Z", "prediction": "All configs YAML", "actual": "Found 2 JSON configs in runtime/", "evidence": ["runtime/config.json", "runtime/secrets.json"], "result": "FALSIFIED", "confidence_delta": -0.85, "new_status": "CALIBRATION_ERROR", "layer": "L2"}
+{"assumption_id": "ASSUME-001", "timestamp": "2026-10-22T10:30:00Z", "prediction": "All configs YAML", "actual": "Found 2 JSON configs in runtime/", "evidence": ["runtime/config.json", "runtime/secrets.json"], "result": "FALSIFIED", "confidence_delta": -0.85, "new_status": "CALIBRATION_ERROR", "layer": "L2", "assumption_origin": "model"}
+{"assumption_id": "ASSUME-047", "timestamp": "2026-10-22T10:31:00Z", "prediction": "User intends explicit error handling via Result<T,E>", "actual": "30 files use Result<T,E>, 2 use try/catch, 3 use exceptions", "evidence": ["src/handler1.py", "src/handler2.py"], "result": "CONFIRMED", "confidence_delta": 0.05, "new_status": "USER_INTENT_VALIDATED", "layer": "L2", "assumption_origin": "user_inferred"}
 ```
 
 **Rule:** Every testable assumption MUST produce a log entry. No silent skips.
 
 ---
 
-### Phase 3 — BLIND SPOT MAP (Gap Discovery)
+### Phase 3 — BLIND SPOT MAP (Gap Discovery — Model + User)
 
-**Goal:** From calibration results, identify and classify blind spots by layer and severity.
+**Goal:** From calibration results, identify and classify blind spots by layer and severity for both model and user.
 
-**Blind Spot Categories:**
+**Blind Spot Categories (Model):**
 
 | Category | Definition | Severity |
 |----------|------------|----------|
-| **CALIBRATION_ERROR** | High confidence assumption falsified | Critical if L3/L4, High if L2, Medium if L1 |
+| **CALIBRATION_ERROR** | High confidence model assumption falsified | Critical if L3/L4, High if L2, Medium if L1 |
 | **UNVERIFIED_CRITICAL** | `testable=true` but test inconclusive, layer L3/L4 | High |
 | **IMPLICIT_CONVENTION_GAP** | Pattern exists but undocumented, deviation found | Medium |
 | **DOMAIN_GAP** | Missing domain knowledge required by workspace | High if blocks task |
 | **MEMORY_DRIFT** | Workspace changed since last memory write | Medium |
 | **POSSIBLE_BLIND_SPOT** | Plausible gap not yet established (per UBS rule) | Low, discoverability: Hard |
 
+**Blind Spot Categories (User):**
+
+| Category | Definition | Severity |
+|----------|------------|----------|
+| **USER_MISALIGNMENT** | User's mental model contradicts workspace reality (falsified USER_INTENT/USER_NEED) | Critical if L3/L4, High if L2 |
+| **USER_TACIT_GAP** | User tacitly assumes X but workspace doesn't enforce/contradicts | High |
+| **USER_BLIND_SPOT** | User unaware of X in workspace (validated USER_BLIND) | High if L3/L4 |
+| **USER_GOAL_TASK_MISMATCH** | User's stated goal incompatible with workspace constraints | Critical |
+| **USER_IMPLICIT_CONSTRAINT_VIOLATION** | User ignores constraint workspace implicitly enforces | High |
+| **USER_UNSTATED_REQUIREMENT** | Workspace requires X but user never mentioned it | Medium |
+
 **For each blind spot, produce:**
 ```markdown
-### BLIND_SPOT-003
+### BLIND_SPOT-003 (Model: CALIBRATION_ERROR)
 - **Category**: CALIBRATION_ERROR
 - **Layer**: L3 (Architecture)
 - **Severity**: Critical
@@ -261,20 +366,65 @@ Default: **deep**
 - **Integration Point**: `doubt-driven-development` pre-check for architecture decisions
 ```
 
-**Output:** `BLIND_SPOT_REGISTER.md` (markdown table + detail sections)
+```markdown
+### BLIND_SPOT-012 (User: USER_MISALIGNMENT)
+- **Category**: USER_MISALIGNMENT
+- **Layer**: L3 (Architecture)
+- **Severity**: Critical
+- **User Assumption**: "User intends clean architecture (stated: 'we follow clean architecture')"
+- **Workspace Reality**: Modular monolith with cross-layer imports
+- **Confidence Delta**: -0.80 (user confidence 0.9, workspace evidence 0.1)
+- **Discoverability**: Moderate (requires user statement + workspace analysis)
+- **Impact**: User will make architecture decisions assuming clean layers; actual code violates this
+- **Learning Objective**: Align user mental model with actual architecture
+- **Verification Protocol**: Present import graph to user; confirm/refine mental model
+- **Integration Point**: `using-agent-skills` pre-check — flag before architecture tasks
+```
 
-**Stop Condition for Quick Mode:** Top 5 blind spots by (severity × layer_weight) where L4=4, L3=3, L2=2, L1=1.
+```markdown
+### BLIND_SPOT-019 (User: USER_TACIT_GAP)
+- **Category**: USER_TACIT_GAP
+- **Layer**: L4 (Domain)
+- **Severity**: High
+- **User Tacit Assumption**: "All monetary values use cents (integers)"
+- **Workspace Reality**: 95% use Money type (cents), 5% use float for prices in legacy billing/
+- **Confidence Delta**: -0.65 (tacit confidence 0.95, workspace evidence 0.3 for legacy)
+- **Discoverability**: Hard (requires cross-module type analysis)
+- **Impact**: Legacy billing calculates in floats → rounding errors in financial reports
+- **Learning Objective**: Document Money type as required pattern; migrate legacy billing
+- **Verification Protocol**: Type-check all price calculations; flag float usage
+- **Integration Point**: `code-review-and-quality` — flag float price calculations
+```
+
+```markdown
+### BLIND_SPOT-027 (User: USER_GOAL_TASK_MISMATCH)
+- **Category**: USER_GOAL_TASK_MISMATCH
+- **Layer**: L3 (Architecture)
+- **Severity**: Critical
+- **User Stated Goal**: "Quick refactor of auth module (2 days)"
+- **Workspace Reality**: Auth has 50% test coverage, circular deps with 3 services, no interfaces
+- **Confidence Delta**: N/A (goal vs. reality mismatch)
+- **Discoverability**: Easy (code analysis + user statement)
+- **Impact**: 2-day estimate → 3-week stabilization; user will be blocked
+- **Learning Objective**: Calibrate effort estimates to workspace reality
+- **Verification Protocol**: Run dependency analysis + test coverage on auth module
+- **Integration Point**: `planning-and-task-breakdown` — weight risk by blind spot severity
+```
+
+**Output:** `BLIND_SPOT_REGISTER.md` (markdown table + detail sections for both model and user blind spots)
+
+**Stop Condition for Quick Mode:** Top 5 blind spots by (severity × layer_weight) where L4=4, L3=3, L2=2, L1=1. Includes both model and user categories.
 
 ---
 
-### Phase 4 — LEARNABLE UNIT SYNTHESIS
+### Phase 4 — LEARNABLE UNIT SYNTHESIS (Model + User)
 
-**Goal:** Convert each blind spot into a **learnable unit** — a self-contained knowledge package with verification protocol.
+**Goal:** Convert each blind spot (model + user) into a **learnable unit** — a self-contained knowledge package with verification protocol.
 
 **For each blind spot in `BLIND_SPOT_REGISTER` (priority order):**
 
 ```markdown
-# LEARNING_UNIT-007
+# LEARNING_UNIT-007 (Model: CALIBRATION_ERROR)
 ## Learning Objective
 Understand workspace's actual module architecture and dependency rules.
 
@@ -306,25 +456,122 @@ Modular monolith with core as central domain module; runtime/ is operational scr
 PENDING → IN_PROGRESS → VERIFIED → PERSISTED
 ```
 
+```markdown
+# LEARNING_UNIT-012 (User: USER_MISALIGNMENT)
+## Learning Objective
+Align user mental model with actual workspace architecture.
+
+## Current Belief (Falsified)
+User believes: "We follow clean architecture" — USER_MISALIGNMENT, delta -0.80
+
+## Corrected Understanding (Hypothesis)
+User's mental model is clean architecture; actual is modular monolith. Gap causes wrong architectural decisions.
+
+## Verification Protocol
+1. Present import graph showing cross-layer imports
+2. Ask user to describe their mental model
+3. Co-create accurate architecture documentation
+4. Update ADR-001 or create new ADR
+
+## Success Criteria
+- User acknowledges modular monolith pattern
+- Architecture doc updated to reflect reality
+- Future decisions use correct model
+
+## Knowledge Artifact Template
+- **Type**: User Mental Model Alignment Doc
+- **Location**: `.claude/knowledge/learning-units/user-architecture-model.md`
+- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/user-architecture-model.md`
+- **Integration**: Tag for `using-agent-skills` pre-check, `planning-and-task-breakdown`
+
+## Status
+PENDING → IN_PROGRESS → VERIFIED → PERSISTED
+```
+
+```markdown
+# LEARNING_UNIT-019 (User: USER_TACIT_GAP)
+## Learning Objective
+Enforce Money type for all monetary values; eliminate float price calculations.
+
+## Current Belief (Falsified)
+User tacitly assumes all prices in cents — USER_TACIT_GAP, delta -0.65
+
+## Corrected Understanding (Hypothesis)
+95% of codebase correctly uses Money type (cents), but legacy billing/ uses float → financial rounding errors.
+
+## Verification Protocol
+1. Type-check all price calculations across workspace
+2. Identify all float price usages in billing/
+3. Create migration plan for legacy billing to Money type
+4. Add linting rule: "no float for monetary values"
+
+## Success Criteria
+- Zero float price calculations in workspace
+- Linting rule enforced in CI
+- Legacy billing migrated to Money type
+
+## Knowledge Artifact Template
+- **Type**: Domain Convention + Linting Rule
+- **Location**: `.claude/knowledge/learning-units/money-type-enforcement.md`
+- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/money-type-enforcement.md`
+- **Integration**: Tag for `code-review-and-quality`, `context-engineering`
+
+## Status
+PENDING → IN_PROGRESS → VERIFIED → PERSISTED
+```
+
+```markdown
+# LEARNING_UNIT-027 (User: USER_GOAL_TASK_MISMATCH)
+## Learning Objective
+Calibrate effort estimates to workspace reality for auth module.
+
+## Current Belief (Falsified)
+User estimates: "Quick auth refactor (2 days)" — USER_GOAL_TASK_MISMATCH, Critical
+
+## Corrected Understanding (Hypothesis)
+Auth module requires 3-week stabilization: 50% test coverage, 3 circular deps, no interfaces. Quick refactor impossible.
+
+## Verification Protocol
+1. Run full dependency analysis on auth module
+2. Measure test coverage per file
+3. Identify circular dependency chains
+4. Create phased refactor plan with milestones
+
+## Success Criteria
+- Realistic effort estimate documented (3 weeks)
+- Phased plan with measurable milestones
+- User acknowledges revised timeline
+
+## Knowledge Artifact Template
+- **Type**: Effort Calibration Doc
+- **Location**: `.claude/knowledge/learning-units/auth-refactor-effort.md`
+- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/auth-refactor-effort.md`
+- **Integration**: Tag for `planning-and-task-breakdown`, `using-agent-skills` pre-check
+
+## Status
+PENDING → IN_PROGRESS → VERIFIED → PERSISTED
+```
+
 **Output:** Individual `.md` files in `.claude/knowledge/learning-units/<id>.md`
 
-**Rule:** Every `CRITICAL` and `HIGH` blind spot MUST produce a learning unit. `MEDIUM` if time permits. `LOW` → `POSSIBLE_BLIND_SPOT` log only.
+**Rule:** Every `CRITICAL` and `HIGH` blind spot (model + user) MUST produce a learning unit. `MEDIUM` if time permits. `LOW` → `POSSIBLE_BLIND_SPOT` log only.
 
 ---
 
-### Phase 5 — KNOWLEDGE BASE UPDATE
+### Phase 5 — KNOWLEDGE BASE UPDATE (Model + User)
 
-**Goal:** Persist verified learnings to the project memory system and local knowledge base.
+**Goal:** Persist verified learnings to the project memory system and local knowledge base — for both model calibration and user context alignment.
 
 **Actions:**
-1. **Write learning unit files** to `.claude/knowledge/learning-units/`
+1. **Write learning unit files** to `.claude/knowledge/learning-units/` (both model and user types)
 2. **Update memory system** — For each learning unit that represents a durable decision/pattern:
    - Create memory file in `.claude/projects/<proj>/memory/<slug>.md` (frontmatter + body)
    - Update `MEMORY.md` index with wikilink
 3. **Update workspace model** — Patch `WORKSPACE_MODEL.md` with verified conventions (status → `FACT`/`WORKSPACE_CONVENTION`)
-4. **Append to calibration log** — Already done in Phase 2, but add summary entry
+4. **Update user context model** — Patch `USER_CONTEXT_MODEL.md` with validated user intent/needs/tacit knowledge
+5. **Append to calibration log** — Already done in Phase 2, but add summary entry
 
-**Memory File Template:**
+**Memory File Template (Model):**
 ```markdown
 ---
 name: workspace-architecture-pattern
@@ -337,6 +584,7 @@ metadata:
   layer: L3
   verified: true
   calibration_delta: -0.72
+  source: model_calibration
 ---
 
 Workspace's architecture is a **modular monolith**, not clean architecture layers.
@@ -350,13 +598,45 @@ Workspace's architecture is a **modular monolith**, not clean architecture layer
 **Falsifier:** If a formal architecture doc (ADR) appears enforcing clean layers, this memory is obsolete.
 ```
 
-**Output:** Updated memory index + new memory files + updated workspace model.
+**Memory File Template (User):**
+```markdown
+---
+name: user-architecture-model
+description: "User mental model: clean architecture; actual: modular monolith. Gap causes wrong architectural decisions."
+metadata:
+  node_type: memory
+  type: project
+  originSessionId: <current-session-id>
+  modified: <ISO-timestamp>
+  layer: L3
+  verified: true
+  calibration_delta: -0.80
+  source: user_context
+  user_misalignment: true
+---
+
+User's mental model assumes **clean architecture** (domain/application/infrastructure layers).
+Actual workspace is a **modular monolith** with cross-layer imports.
+
+**Evidence:** Import graph shows core imports runtime/ and system/ directly. User explicitly stated "we follow clean architecture" in conversation.
+
+**Why this matters:** User will make architecture decisions assuming clean layers. Actual code violates this. Decisions will be wrong.
+
+**How to apply:** 
+- Before architecture tasks, remind user: "Workspace is modular monolith, not clean architecture"
+- In `using-agent-skills` pre-check, flag architecture decisions for review
+- In `planning-and-task-breakdown`, weight architecture tasks with this misalignment risk
+
+**Falsifier:** If user updates mental model AND workspace gets formal ADR enforcing clean layers.
+```
+
+**Output:** Updated memory index + new memory files + updated workspace model + updated user context model.
 
 ---
 
-### Phase 6 — CALIBRATION REPORT
+### Phase 6 — CALIBRATION REPORT (Model + User)
 
-**Goal:** Synthesize session results into actionable summary for current and future sessions.
+**Goal:** Synthesize session results into actionable summary for current and future sessions — covering both model calibration and user context alignment.
 
 **Report Structure:**
 ```markdown
@@ -368,7 +648,7 @@ Workspace's architecture is a **modular monolith**, not clean architecture layer
 - Cross-model validation: Yes (2 reviewers)
 - Historical trend: Loaded 12 prior sessions
 
-## Assumption Statistics
+## Assumption Statistics (Model)
 | Metric | Count |
 |--------|-------|
 | Total assumptions extracted | 67 |
@@ -378,7 +658,19 @@ Workspace's architecture is a **modular monolith**, not clean architecture layer
 | Falsified (CALIBRATION_ERROR) | 12 |
 | Inconclusive | 4 |
 
-## Calibration Curve
+## Assumption Statistics (User Context)
+| Metric | Count |
+|--------|-------|
+| Total user assumptions extracted | 23 |
+| Testable | 18 |
+| Tested | 18 |
+| Confirmed (USER_INTENT_VALIDATED) | 8 |
+| Falsified (USER_MISALIGNMENT) | 5 |
+| Falsified (USER_TACIT_GAP) | 3 |
+| Falsified (USER_BLIND_SPOT) | 2 |
+| Inconclusive | 0 |
+
+## Calibration Curve (Model)
 - Overall accuracy at stated confidence:
   - 0.9–1.0: 78% actual (overconfident by 0.15)
   - 0.7–0.89: 71% actual (overconfident by 0.12)
@@ -388,20 +680,35 @@ Workspace's architecture is a **modular monolith**, not clean architecture layer
 - **Systematic overconfidence zones**: L2 conventions (naming, config), L3 architecture
 - **Systematic underconfidence zones**: L4 domain knowledge
 
-## Top Blind Spots (by risk = severity × layer_weight)
+## User Context Alignment
+- **User intent validated**: 8/23 (35%) — user's stated/expressed intent matches workspace
+- **User misalignments found**: 5/23 (22%) — user mental model contradicts workspace
+- **User tacit gaps found**: 3/23 (13%) — user tacitly assumes but workspace doesn't enforce
+- **User blind spots found**: 2/23 (9%) — user unaware of workspace realities
+- **User goal-task mismatches**: 1/23 (4%) — stated goal incompatible with workspace
+
+## Top Blind Spots — Model (by risk = severity × layer_weight)
 | Rank | ID | Category | Layer | Severity | Delta | Learning Unit |
 |------|-----|----------|-------|----------|-------|---------------|
 | 1 | BS-003 | CALIBRATION_ERROR | L3 | Critical | -0.72 | LU-007 ✓ |
 | 2 | BS-011 | DOMAIN_GAP | L4 | High | N/A | LU-012 ✓ |
 | 3 | BS-005 | UNVERIFIED_CRITICAL | L3 | High | N/A | LU-008 ⏳ |
 
+## Top Blind Spots — User (by risk = severity × layer_weight)
+| Rank | ID | Category | Layer | Severity | Delta | Learning Unit |
+|------|-----|----------|-------|----------|-------|---------------|
+| 1 | BS-012 | USER_MISALIGNMENT | L3 | Critical | -0.80 | LU-012 ✓ |
+| 2 | BS-027 | USER_GOAL_TASK_MISMATCH | L3 | Critical | N/A | LU-027 ✓ |
+| 3 | BS-019 | USER_TACIT_GAP | L4 | High | -0.65 | LU-019 ✓ |
+
 ## Learning Units Produced
-- LU-007: Workspace architecture pattern (VERIFIED → PERSISTED)
-- LU-012: Domain-specific conventions (VERIFIED → PERSISTED)
-- LU-008: Error handling convention (IN_PROGRESS)
+- LU-007: Workspace architecture pattern (VERIFIED → PERSISTED) [Model]
+- LU-012: User architecture model alignment (VERIFIED → PERSISTED) [User]
+- LU-019: Money type enforcement (VERIFIED → PERSISTED) [User]
+- LU-027: Auth refactor effort calibration (VERIFIED → PERSISTED) [User]
 
 ## Cross-Model Validation (Deep Mode)
-- Reviewer 1: Confirmed 10/12 calibration errors, found 3 additional
+- Reviewer 1: Confirmed 10/12 model calibration errors, found 3 additional
 - Reviewer 2: Confirmed 9/12, flagged 2 as workspace-specific not universal
 - Consensus: Architecture pattern and domain conventions are highest leverage
 
@@ -413,16 +720,20 @@ Workspace's architecture is a **modular monolith**, not clean architecture layer
 
 ## Pre-Load Recommendations for Next Session
 1. Load `WORKSPACE_MODEL.md` + `workspace-architecture-pattern` memory
-2. Load `domain-conventions` memory (LU-012)
-3. Flag: Error handling convention still unverified (LU-008) — test early
-4. Re-verify: Config format assumption — workspace changed
+2. Load `user-architecture-model` memory (user misalignment)
+3. Load `domain-conventions` memory (LU-012)
+4. Load `money-type-enforcement` memory (LU-019)
+5. Flag: Error handling convention still unverified (LU-008) — test early
+6. Re-verify: Config format assumption — workspace changed
+7. Before auth tasks: Load `auth-refactor-effort` memory (3-week estimate)
 
 ## Open Questions
 - Does core have a formal plugin/extension system? (BS-014, POSSIBLE)
 - Are there undocumented CLI commands beyond argparse help? (BS-018, POSSIBLE)
+- Will user update mental model after seeing import graph? (BS-012 follow-up)
 
 ## Stop Reason
-**STOP B**: All L3/L4 blind spots have learning units with `VERIFIED` status.
+**STOP B**: All L3/L4 blind spots (model + user) have learning units with `VERIFIED` status.
 ```
 
 **Output:** `CALIBRATION_REPORT.md` (displayed to user) + `CALIBRATION_SUMMARY.json` (machine-readable for `using-agent-skills` pre-check)
