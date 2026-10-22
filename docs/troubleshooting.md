@@ -397,11 +397,11 @@ claude plugin validate ./skills/self-audit --strict --json
 
 ```bash
 # 1. Add marketplace first
-claude plugin marketplace add rexrayf3-prog/self-audit-skill --scope project
+claude plugin marketplace add rrxprotex/self-audit-skill --scope project
 claude plugin install self-audit@self-audit-marketplace
 
 # 2. One-liner (v2.1.292+)
-claude plugin install self-audit@rexrayf3-prog/self-audit-skill --marketplace rexrayf3-prog/self-audit-skill
+claude plugin install self-audit@rrxprotex/self-audit-skill --marketplace rrxprotex/self-audit-skill
 
 # 3. Check plugin installed
 claude plugin list

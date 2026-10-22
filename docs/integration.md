@@ -601,7 +601,7 @@ jobs:
             --output calibration-trend-report.md
       
       - name: Comment on calibration trend
-        if: github.repository_owner == 'rexrayf3-prog'
+        if: github.repository_owner == 'rrxprotex'
         uses: actions/github-script@v7
         with:
           script: |

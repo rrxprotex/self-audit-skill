@@ -10,7 +10,7 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By particip
 
 ### Reporting Bugs
 
-1. Check existing [issues](https://github.com/rexrayf3-prog/self-audit-skill/issues) first
+1. Check existing [issues](https://github.com/rrxprotex/self-audit-skill/issues) first
 2. Create a new issue with:
    - Clear title and description
    - Steps to reproduce
@@ -20,7 +20,7 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By particip
 
 ### Suggesting Features
 
-1. Open a [GitHub Discussion](https://github.com/rexrayf3-prog/self-audit-skill/discussions) for design discussion
+1. Open a [GitHub Discussion](https://github.com/rrxprotex/self-audit-skill/discussions) for design discussion
 2. For small improvements, a PR with clear description is welcome
 
 ### Pull Requests
@@ -36,7 +36,7 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By particip
 
 ```bash
 # Clone
-git clone https://github.com/rexrayf3-prog/self-audit-skill.git
+git clone https://github.com/rrxprotex/self-audit-skill.git
 cd self-audit-skill
 
 # Install Claude Code
@@ -126,4 +126,4 @@ Releases are automated via GitHub Actions on tag push (`v*`).
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/rexrayf3-prog/self-audit-skill/discussions) or issue.
+Open a [GitHub Discussion](https://github.com/rrxprotex/self-audit-skill/discussions) or issue.
