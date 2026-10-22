@@ -41,6 +41,7 @@ Run it once and you get a set of durable artifacts under `.claude/knowledge/`:
 | `calibration-report.md` / `calibration-summary.json` | Human + machine-readable audit summary |
 | `calibration-trend-report.md` | Calibration improvement across sessions (deep mode) |
 | `cross-model-validation.log.jsonl` | Adversarial reviewer verdicts (deep mode) |
+| `dashboard.html` | Self-contained visual dashboard of the calibration data (inline SVG, offline) |
 
 Every finding is classified along two axes:
 
@@ -156,6 +157,9 @@ claude plugin install self-audit@self-audit-marketplace
 # Maximum rigor: cross-model validation + trend analysis
 /self-audit --mode deep
 
+# Also discover & calibrate what the user needs/intends/knows (user-context)
+/self-audit --mode deep --user-context
+
 # Custom workspace / output
 /self-audit --mode deep --workspace /path/to/project --output-dir /custom/knowledge
 ```
@@ -171,7 +175,16 @@ python skills/self-audit/scripts/run-self-audit.py --mode deep --workspace /path
 ```text
 usage: run-self-audit.py [-h] [--mode {quick,standard,deep}]
                          [--workspace WORKSPACE] [--output-dir OUTPUT_DIR]
-                         [--no-cross-model] [--no-trend] [--verbose]
+                         [--no-cross-model] [--no-trend] [--user-context] [--verbose]
+```
+
+### Visualize the calibration data
+
+Turn any audit's artifacts into a single self-contained HTML dashboard (inline SVG charts — calibration curve, blind-spot distribution, layer breakdown, trend — no external libraries, works offline):
+
+```bash
+python skills/self-audit/scripts/generate-dashboard.py --knowledge-root .claude/knowledge
+# → .claude/knowledge/dashboard.html
 ```
 
 ---
@@ -194,6 +207,7 @@ Control the run through environment variables — this is what makes it portable
 | `SELF_AUDIT_BLIND_SPOT_THRESHOLD` | `0.3` | Min \|confidence delta\| to escalate to a blind spot |
 | `SELF_AUDIT_CROSS_MODEL_REVIEWERS` | `2` | Number of cross-model reviewers (deep mode) |
 | `SELF_AUDIT_TREND_MIN_SESSIONS` | `2` | Min sessions before trend direction is computed |
+| `SELF_AUDIT_USER_CONTEXT` | `false` | Also discover & calibrate user-context assumptions (intent, needs, tacit knowledge, goal-task fit) |
 
 ---
 
@@ -235,6 +249,7 @@ self-audit-skill/
 │   ├── examples.md          # Usage examples
 │   └── scripts/
 │       ├── run-self-audit.py        # Core CLI (harness-agnostic)
+│       ├── generate-dashboard.py    # Self-contained HTML dashboard
 │       ├── calibration-analytics.py # Log analysis
 │       └── validate-assumptions.py  # Standalone validator
 ├── templates/               # Starter templates for every artifact

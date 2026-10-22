@@ -343,7 +343,8 @@ This project follows a **modular monolith** pattern (not clean architecture).
                 # Check for table with required columns
                 has_table = "| Rank | ID | Category | Layer | Severity |" in blind_spots
                 # Check that PRESENT categories are valid (not that all must be present)
-                valid_categories_list = ["CALIBRATION_ERROR", "UNVERIFIED_CRITICAL", "IMPLICIT_CONVENTION_GAP", "DOMAIN_GAP", "MEMORY_DRIFT", "POSSIBLE_BLIND_SPOT", "PERSISTENT_BLIND_SPOT"]
+                valid_categories_list = ["CALIBRATION_ERROR", "UNVERIFIED_CRITICAL", "IMPLICIT_CONVENTION_GAP", "DOMAIN_GAP", "MEMORY_DRIFT", "POSSIBLE_BLIND_SPOT", "PERSISTENT_BLIND_SPOT",
+                                         "USER_MISALIGNMENT", "USER_TACIT_GAP", "USER_BLIND_SPOT", "USER_GOAL_TASK_MISMATCH", "USER_IMPLICIT_CONSTRAINT_VIOLATION", "USER_UNSTATED_REQUIREMENT"]
                 valid_layers_list = ["L1", "L2", "L3", "L4"]
                 valid_severities_list = ["Critical", "High", "Medium", "Low"]
 

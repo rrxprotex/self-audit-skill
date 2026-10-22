@@ -49,7 +49,8 @@ for row in rows:
 assert len(blind_spots) >= 0, f"Expected a non-negative blind spot count, got {len(blind_spots)}"
 
 # Validate each
-valid_categories = {"CALIBRATION_ERROR", "UNVERIFIED_CRITICAL", "IMPLICIT_CONVENTION_GAP", "DOMAIN_GAP", "MEMORY_DRIFT", "POSSIBLE_BLIND_SPOT", "PERSISTENT_BLIND_SPOT"}
+valid_categories = {"CALIBRATION_ERROR", "UNVERIFIED_CRITICAL", "IMPLICIT_CONVENTION_GAP", "DOMAIN_GAP", "MEMORY_DRIFT", "POSSIBLE_BLIND_SPOT", "PERSISTENT_BLIND_SPOT",
+                    "USER_MISALIGNMENT", "USER_TACIT_GAP", "USER_BLIND_SPOT", "USER_GOAL_TASK_MISMATCH", "USER_IMPLICIT_CONSTRAINT_VIOLATION", "USER_UNSTATED_REQUIREMENT"}
 valid_layers = {"L1", "L2", "L3", "L4"}
 valid_severities = {"Critical", "High", "Medium", "Low"}
 

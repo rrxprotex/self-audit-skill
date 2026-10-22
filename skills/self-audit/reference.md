@@ -195,6 +195,147 @@ The Self-Audit skill implements a 6-phase epistemic calibration pipeline:
 <string> — condition that would invalidate this learning
 ```
 
+### Worked Examples (one per category)
+
+These complete, real-shaped learning units show how the schema adapts per blind-spot category. The model variants cite the model's assumption; the user variants cite the user's stated goal, mental model, or tacit assumption.
+
+#### Model: CALIBRATION_ERROR (LU-007)
+
+```markdown
+# LEARNING_UNIT-007 (Model: CALIBRATION_ERROR)
+## Learning Objective
+Understand workspace's actual module architecture and dependency rules.
+
+## Current Belief (Falsified)
+Clean architecture layers (domain/app/infra) — CALIBRATION_ERROR, delta -0.72
+
+## Corrected Understanding (Hypothesis)
+Modular monolith with core as central domain module; runtime/ is operational scripts; system/ is infrastructure. No strict layer enforcement.
+
+## Verification Protocol
+1. Generate full import graph: `pydeps core --show-deps -T svg`
+2. Document module categories: domain, operational, infrastructure, test
+3. Check for circular dependencies
+4. Compare with any ADR/architecture doc
+
+## Success Criteria
+- Import graph generated and analyzed
+- Module taxonomy documented with evidence
+- Any circular deps flagged
+- Architecture pattern named and described
+
+## Knowledge Artifact Template
+- **Type**: Architecture Decision Record (ADR) or Pattern Doc
+- **Location**: `.claude/knowledge/learning-units/architecture-pattern.md`
+- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/MEMORY.md`
+- **Integration**: Tag for `doubt-driven-development` pre-check, `context-engineering` load
+
+## Status
+PENDING → IN_PROGRESS → VERIFIED → PERSISTED
+```
+
+#### User: USER_MISALIGNMENT (LU-012)
+
+```markdown
+# LEARNING_UNIT-012 (User: USER_MISALIGNMENT)
+## Learning Objective
+Align user mental model with actual workspace architecture.
+
+## Current Belief (Falsified)
+User believes: "We follow clean architecture" — USER_MISALIGNMENT, delta -0.80
+
+## Corrected Understanding (Hypothesis)
+User's mental model is clean architecture; actual is modular monolith. Gap causes wrong architectural decisions.
+
+## Verification Protocol
+1. Present import graph showing cross-layer imports
+2. Ask user to describe their mental model
+3. Co-create accurate architecture documentation
+4. Update ADR-001 or create new ADR
+
+## Success Criteria
+- User acknowledges modular monolith pattern
+- Architecture doc updated to reflect reality
+- Future decisions use correct model
+
+## Knowledge Artifact Template
+- **Type**: User Mental Model Alignment Doc
+- **Location**: `.claude/knowledge/learning-units/user-architecture-model.md`
+- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/user-architecture-model.md`
+- **Integration**: Tag for `using-agent-skills` pre-check, `planning-and-task-breakdown`
+
+## Status
+PENDING → IN_PROGRESS → VERIFIED → PERSISTED
+```
+
+#### User: USER_TACIT_GAP (LU-019)
+
+```markdown
+# LEARNING_UNIT-019 (User: USER_TACIT_GAP)
+## Learning Objective
+Enforce Money type for all monetary values; eliminate float price calculations.
+
+## Current Belief (Falsified)
+User tacitly assumes all prices in cents — USER_TACIT_GAP, delta -0.65
+
+## Corrected Understanding (Hypothesis)
+95% of codebase correctly uses Money type (cents), but legacy billing/ uses float → financial rounding errors.
+
+## Verification Protocol
+1. Type-check all price calculations across workspace
+2. Identify all float price usages in billing/
+3. Create migration plan for legacy billing to Money type
+4. Add linting rule: "no float for monetary values"
+
+## Success Criteria
+- Zero float price calculations in workspace
+- Linting rule enforced in CI
+- Legacy billing migrated to Money type
+
+## Knowledge Artifact Template
+- **Type**: Domain Convention + Linting Rule
+- **Location**: `.claude/knowledge/learning-units/money-type-enforcement.md`
+- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/money-type-enforcement.md`
+- **Integration**: Tag for `code-review-and-quality`, `context-engineering`
+
+## Status
+PENDING → IN_PROGRESS → VERIFIED → PERSISTED
+```
+
+#### User: USER_GOAL_TASK_MISMATCH (LU-027)
+
+```markdown
+# LEARNING_UNIT-027 (User: USER_GOAL_TASK_MISMATCH)
+## Learning Objective
+Calibrate effort estimates to workspace reality for auth module.
+
+## Current Belief (Falsified)
+User estimates: "Quick auth refactor (2 days)" — USER_GOAL_TASK_MISMATCH, Critical
+
+## Corrected Understanding (Hypothesis)
+Auth module requires 3-week stabilization: 50% test coverage, 3 circular deps, no interfaces. Quick refactor impossible.
+
+## Verification Protocol
+1. Run full dependency analysis on auth module
+2. Measure test coverage per file
+3. Identify circular dependency chains
+4. Create phased refactor plan with milestones
+
+## Success Criteria
+- Realistic effort estimate documented (3 weeks)
+- Phased plan with measurable milestones
+- User acknowledges revised timeline
+
+## Knowledge Artifact Template
+- **Type**: Effort Calibration Doc
+- **Location**: `.claude/knowledge/learning-units/auth-refactor-effort.md`
+- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/auth-refactor-effort.md`
+- **Integration**: Tag for `planning-and-task-breakdown`, `using-agent-skills` pre-check
+
+## Status
+PENDING → IN_PROGRESS → VERIFIED → PERSISTED
+```
+
 ## Configuration
 
 ### Environment Variables

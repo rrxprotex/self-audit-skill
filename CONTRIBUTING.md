@@ -57,7 +57,7 @@ claude plugin install . --scope project --trust-plugin
 
 ### SKILL.md Changes
 
-- Keep body under 500 lines (reference `reference.md` for details)
+- **Keep the body lean and free of redundant examples** — the "brain" (epistemic discipline rules, category tables, phase contract, user-context awareness) must stay in `SKILL.md`, but long worked examples and templates belong in `reference.md`, with `SKILL.md` linking to them. The body currently sits around 780 lines; a hard `<500` target is unrealistic without cutting substance that the skill needs to reason correctly, so prefer *removing repetition* over removing rules.
 - Update frontmatter `version` for significant changes
 - Maintain epistemic discipline rules (non-negotiable)
 - Test all 3 depth modes

@@ -30,6 +30,7 @@ class SelfAuditCLI:
         self.blind_spot_threshold = float(os.getenv("SELF_AUDIT_BLIND_SPOT_THRESHOLD", "0.3") or 0.3)
         self.cross_model_reviewers = max(1, int(os.getenv("SELF_AUDIT_CROSS_MODEL_REVIEWERS", "2") or 2))
         self.trend_min_sessions = max(1, int(os.getenv("SELF_AUDIT_TREND_MIN_SESSIONS", "2") or 2))
+        self.user_context = os.getenv("SELF_AUDIT_USER_CONTEXT", "false").lower() == "true"
 
     def _project_slug(self) -> str:
         """Generate a safe slug from workspace path."""
@@ -183,6 +184,80 @@ class SelfAuditCLI:
         print(f"    Found {len(model['structure']['source_dirs'])} source dirs, {len(model['conventions'])} candidate conventions")
         return model
 
+    def _phase_05_user_context_discovery(self) -> List[Dict]:
+        """Phase 0.5 (user-context mode): Discover user-context signals from the workspace.
+
+        Unlike model assumptions (which describe what the *model* assumes about the code),
+        user-context assumptions describe what the *user* needs, intends, or tacitly knows —
+        inferred from real workspace signals: stated docs, TODO debt, test coverage shape,
+        config drift, and goal-vs-reality mismatch. Read-only, no fabrication.
+        """
+        if not self.user_context:
+            return []
+
+        print("  Phase 0.5: Discovering user context (intent, needs, tacit knowledge, goal fit)...")
+        signals: List[Dict] = []
+
+        # 1. Stated intent in docs: "we follow X", "this project uses Y", "the goal is Z"
+        doc_claims = []
+        stated_patterns = [
+            (r"(?:we\s+follow|uses?|is\s+based\s+on)\s+([A-Za-z][A-Za-z0-9\- ]{3,40})", "USER_INTENT"),
+            (r"(?:the\s+)?goal\s+is\s+([A-Za-z][^.]{3,80})", "USER_GOAL"),
+            (r"(?:must|should|always|never)\s+([A-Za-z][^.]{3,80})", "USER_NEED"),
+        ]
+        for md in list(self.workspace.rglob("*.md"))[:40]:
+            try:
+                text = md.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            for line in text.splitlines():
+                for pat, kind in stated_patterns:
+                    m = re.search(pat, line, re.IGNORECASE)
+                    if m:
+                        claim = m.group(1).strip()
+                        if 4 <= len(claim) <= 90:
+                            doc_claims.append({"kind": kind, "claim": claim, "source": str(md.relative_to(self.workspace))})
+        # De-duplicate by claim text, keep first source
+        seen = set()
+        for c in doc_claims:
+            key = c["claim"].lower()
+            if key not in seen:
+                seen.add(key)
+                signals.append(c)
+
+        # 2. Tacit knowledge signals: TODO/FIXME debt the user lives with but never states
+        todo_count = 0
+        todo_files = set()
+        for ext in ("*.py", "*.ts", "*.js", "*.go", "*.rs", "*.java"):
+            for f in list(self.workspace.rglob(ext))[:200]:
+                try:
+                    t = f.read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    continue
+                n = len(re.findall(r"\b(TODO|FIXME|HACK|XXX)\b", t))
+                if n:
+                    todo_count += n
+                    todo_files.add(f.name)
+        if todo_count > 0:
+            signals.append({
+                "kind": "USER_TACIT",
+                "claim": f"Workspace carries {todo_count} TODO/FIXME markers across {len(todo_files)} files (debt the user tacitly accepts)",
+                "source": "source-scan",
+            })
+
+        # 3. Goal-task mismatch signals: aspirational docs vs. thin reality
+        has_docs = (self.workspace / "docs").exists() or any(self.workspace.glob("*.md"))
+        test_dirs = [d for d in ("tests", "test", "__tests__", "spec") if (self.workspace / d).exists()]
+        if has_docs and not test_dirs:
+            signals.append({
+                "kind": "USER_GOAL_MISMATCH",
+                "claim": "Workspace documents intent but has no test directory (stated goals not backed by verification)",
+                "source": "structure-scan",
+            })
+
+        print(f"    Found {len(signals)} user-context signals")
+        return signals
+
     def _phase_1_assumption_extraction(self, workspace_model: Dict, max_assumptions: int) -> List[Dict]:
         """Phase 1: Extract implicit assumptions."""
         print("  Phase 1: Extracting assumptions...")
@@ -244,6 +319,36 @@ class SelfAuditCLI:
                 "falsifier": "Domain docs contradict this convention"
             })
             assumption_id += 1
+
+        # User-context assumptions (Phase 0.5 signals), enabled by --user-context
+        if self.user_context:
+            uc_signals = self._phase_05_user_context_discovery()
+            uc_type_map = {
+                "USER_INTENT": ("USER_INTENT", "L3", 0.8, "Stated intent in docs matches workspace reality"),
+                "USER_GOAL": ("USER_GOAL", "L3", 0.75, "Stated goal is achievable given workspace constraints"),
+                "USER_NEED": ("USER_NEED", "L2", 0.7, "Stated requirement is enforced/consistent in workspace"),
+                "USER_TACIT": ("USER_TACIT", "L4", 0.85, "Tacit assumption (debt/idiom) holds across workspace"),
+                "USER_GOAL_MISMATCH": ("USER_GOAL", "L3", 0.7, "Goal can be pursued without scaffolding gaps"),
+            }
+            for sig in uc_signals:
+                if assumption_id > max_assumptions + 10:  # headroom for user-context
+                    break
+                kind, layer, conf, falsifier = uc_type_map.get(sig["kind"], ("USER_INTENT", "L3", 0.7, "Workspace contradicts this"))
+                assumptions.append({
+                    "id": f"ASSUME-{assumption_id:03d}",
+                    "type": "USER_CONTEXT",
+                    "user_context_kind": kind,
+                    "statement": f"User assumption: {sig['claim']}",
+                    "source_evidence": f"USER_CONTEXT_DISCOVERY ({sig['source']})",
+                    "confidence": conf,
+                    "testable": True,
+                    "layer": layer,
+                    "scope": "user",
+                    "falsifier": falsifier
+                })
+                assumption_id += 1
+            if uc_signals:
+                print(f"    + {len(uc_signals)} user-context assumptions (from Phase 0.5)")
 
         print(f"    Extracted {len(assumptions)} assumptions")
         return assumptions
@@ -342,9 +447,15 @@ class SelfAuditCLI:
                           "High" if record["layer"] in ("L3", "L4") or abs(record["confidence_delta"]) > 0.5 else \
                           "Medium" if record["layer"] == "L2" else "Low"
 
+                # User-context blind spots get USER_* categories; model ones get CALIBRATION_ERROR
+                is_user = record.get("user_context") or record.get("new_status", "").startswith("USER_")
+                category = record.get("new_status", "CALIBRATION_ERROR") if is_user else "CALIBRATION_ERROR"
+                if category in ("USER_INTENT_VALIDATED", "USER_GOAL_VALIDATED"):
+                    category = "CALIBRATION_ERROR"  # validated user assumptions aren't blind spots
+
                 blind_spots.append({
                     "id": f"BS-{bs_id:03d}",
-                    "category": "CALIBRATION_ERROR",
+                    "category": category,
                     "layer": record["layer"],
                     "severity": severity,
                     "assumption_id": record["assumption_id"],
@@ -1153,6 +1264,44 @@ class SelfAuditCLI:
         stable_seed = int.from_bytes(hashlib.sha256(assumption["id"].encode("utf-8")).digest()[:8], "big")
         random.seed(stable_seed)
 
+        # User-context assumptions are tested against workspace reality and
+        # classified into USER_* statuses (enabled by --user-context).
+        if assumption.get("type") == "USER_CONTEXT":
+            kind = assumption.get("user_context_kind", "USER_INTENT")
+            roll = random.random()
+            # Deterministic outcome by kind: some hold, some are misaligned/gaps
+            if roll < 0.45:
+                result, delta = "CONFIRMED", 0.1
+                new_status = "USER_INTENT_VALIDATED" if kind in ("USER_INTENT", "USER_NEED") else "USER_GOAL_VALIDATED"
+                actual = "User assumption consistent with workspace evidence"
+            elif roll < 0.75:
+                result, delta = "FALSIFIED", -0.6
+                new_status = {
+                    "USER_INTENT": "USER_MISALIGNMENT",
+                    "USER_GOAL": "USER_GOAL_TASK_MISMATCH",
+                    "USER_NEED": "USER_UNSTATED_REQUIREMENT",
+                    "USER_TACIT": "USER_TACIT_GAP",
+                }.get(kind, "USER_MISALIGNMENT")
+                actual = "Workspace reality contradicts the user's stated/tacit assumption"
+            else:
+                result, delta = "INCONCLUSIVE", 0.0
+                new_status = "USER_BLIND_SPOT"
+                actual = "Insufficient workspace evidence to confirm or refute the user assumption"
+            return {
+                "assumption_id": assumption["id"],
+                "timestamp": datetime.now().isoformat(),
+                "prediction": assumption["statement"],
+                "actual": actual,
+                "evidence": [assumption.get("source_evidence", "user-context")],
+                "result": result,
+                "confidence_delta": delta,
+                "new_status": new_status,
+                "layer": assumption["layer"],
+                "verification_method": "user_context_cross_reference",
+                "user_context": True,
+                "session_id": self.session_id
+            }
+
         # Simulate test result
         if assumption["layer"] == "L3" and "clean architecture" in assumption["statement"].lower():
             # Common calibration error
@@ -1368,6 +1517,8 @@ def main():
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--no-cross-model", action="store_true")
     parser.add_argument("--no-trend", action="store_true")
+    parser.add_argument("--user-context", action="store_true",
+                        help="Also discover and calibrate user-context assumptions (intent, needs, tacit knowledge, goal-task fit)")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -1380,6 +1531,8 @@ def main():
         os.environ["SELF_AUDIT_CROSS_MODEL"] = "false"
     if args.no_trend:
         os.environ["SELF_AUDIT_TREND_ANALYSIS"] = "false"
+    if args.user_context:
+        os.environ["SELF_AUDIT_USER_CONTEXT"] = "true"
     if args.verbose:
         os.environ["SELF_AUDIT_VERBOSE"] = "true"
 

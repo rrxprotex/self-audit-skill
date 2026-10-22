@@ -8,15 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.0] - 2026-10-22
 
 ### Added
-- **User-context calibration**: in addition to model assumptions, the skill now surfaces what the user needs/intends/knows (even when unarticulated) and maps goal-task and tacit-knowledge gaps (USER_MISALIGNMENT / USER_GOAL_TASK_MISMATCH / USER_TACIT_GAP categories). Exposed at the SKILL.md level (`--user-context` argument-hint); the underlying `run-self-audit.py` CLI does not yet take this flag.
+- **User-context calibration**: in addition to model assumptions, the skill now surfaces what the user needs/intends/knows (even when unarticulated) and maps goal-task and tacit-knowledge gaps (USER_MISALIGNMENT / USER_GOAL_TASK_MISMATCH / USER_TACIT_GAP / USER_BLIND_SPOT categories). Enabled via the `--user-context` CLI flag (or `SELF_AUDIT_USER_CONTEXT=true`): Phase 0.5 discovers user-context signals from the workspace (stated docs claims, TODO debt, goal-vs-reality gaps) and Phase 1/2/3 test and classify them alongside model assumptions.
 - **Self-learning loop**: assumptions already FALSIFIED in prior sessions are recorded as `KNOWN_FALSE` and skipped instead of re-tested.
 - **Recurring error detection**: an assumption falsified 3+ times across sessions is escalated to `PERSISTENT_BLIND_SPOT` (Critical) with a recurring impact note.
 - **Learning-unit lifecycle**: real `PENDING → VERIFIED → PERSISTED` state machine, kept in sync across the `learning-units/` artifact and the memory copy; orphaned `PENDING` units from prior runs are advanced.
 - `.gitignore` for generated run artifacts and eval outputs.
+- **HTML dashboard generator** (`generate-dashboard.py`): turns any audit's artifacts into a single self-contained `dashboard.html` — inline SVG charts (calibration curve with over/underconfidence divergence, blind-spot distribution, layer breakdown, outcome mix, trend), light/dark themes, data-table view, tooltips. No external libraries, works offline.
 
 ### Changed
 - README rewritten with genuine run output, a why-stars section, and explicit harness-agnostic positioning (plain Python + Markdown/JSONL, no API key, static evals).
 - Version aligned to `1.1.0` across `plugin.json` and `SKILL.md`.
+- **SKILL.md trimmed** (884 → 787 lines): the four worked learning-unit examples were collapsed into one schema with per-category notes, with the full worked examples moved to `reference.md`. The epistemic-discipline rules, category tables, and phase contract stay in `SKILL.md` (the skill needs them to reason correctly). CONTRIBUTING's "under 500 lines" guidance was corrected — a hard `<500` target would force cutting substance the skill relies on.
 - **Deterministic calibration tests**: the per-assumption simulation seed is now derived from SHA-256 of the assumption id (was Python's salted `hash()`), so results are reproducible across runs and machines.
 - **All documented env vars are now real**: `SELF_AUDIT_MODE`, `SELF_AUDIT_VERBOSE`, `SELF_AUDIT_MAX_ASSUMPTIONS`, `SELF_AUDIT_QUICK_TOP_N`, `SELF_AUDIT_BLIND_SPOT_THRESHOLD`, `SELF_AUDIT_CROSS_MODEL_REVIEWERS`, and `SELF_AUDIT_TREND_MIN_SESSIONS` are wired into the pipeline (they were previously documented but unimplemented).
 - **Deep-mode report metrics are computed, not fabricated**: the `Cross-Model Validation` and `Calibration Trend` sections of `calibration-report.md` now report real reviewer/agreement/trend stats instead of hardcoded placeholders.

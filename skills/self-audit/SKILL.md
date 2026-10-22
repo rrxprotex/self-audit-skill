@@ -421,136 +421,39 @@ Default: **deep**
 
 **Goal:** Convert each blind spot (model + user) into a **learnable unit** — a self-contained knowledge package with verification protocol.
 
-**For each blind spot in `BLIND_SPOT_REGISTER` (priority order):**
+**For each blind spot in `BLIND_SPOT_REGISTER` (priority order), produce a learning unit using this schema** (full worked examples for each category are in `reference.md`):
 
 ```markdown
-# LEARNING_UNIT-007 (Model: CALIBRATION_ERROR)
+# LEARNING_UNIT-<NNN> (<Model|User>: <CATEGORY>)
 ## Learning Objective
-Understand workspace's actual module architecture and dependency rules.
+<what to learn or correct>
 
 ## Current Belief (Falsified)
-Clean architecture layers (domain/app/infra) — CALIBRATION_ERROR, delta -0.72
+<the assumption that was wrong> — <CATEGORY>, delta <signed delta>
 
 ## Corrected Understanding (Hypothesis)
-Modular monolith with core as central domain module; runtime/ is operational scripts; system/ is infrastructure. No strict layer enforcement.
+<what the evidence actually shows>
 
 ## Verification Protocol
-1. Generate full import graph: `pydeps core --show-deps -T svg`
-2. Document module categories: domain, operational, infrastructure, test
-3. Check for circular dependencies
-4. Compare with any ADR/architecture doc
+1. <step — evidence-generating command or check>
+2. <step>
+...
 
 ## Success Criteria
-- Import graph generated and analyzed
-- Module taxonomy documented with evidence
-- Any circular deps flagged
-- Architecture pattern named and described
+- <observable outcome>
+...
 
 ## Knowledge Artifact Template
-- **Type**: Architecture Decision Record (ADR) or Pattern Doc
-- **Location**: `.claude/knowledge/learning-units/architecture-pattern.md`
-- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/MEMORY.md`
-- **Integration**: Tag for `doubt-driven-development` pre-check, `context-engineering` load
+- **Type**: <ADR | Pattern Doc | Convention + Lint Rule | ...>
+- **Location**: `.claude/knowledge/learning-units/<slug>.md`
+- **Memory Pointer**: `.claude/projects/<proj>/memory/<slug>.md`
+- **Integration**: <which skills to tag>
 
 ## Status
 PENDING → IN_PROGRESS → VERIFIED → PERSISTED
 ```
 
-```markdown
-# LEARNING_UNIT-012 (User: USER_MISALIGNMENT)
-## Learning Objective
-Align user mental model with actual workspace architecture.
-
-## Current Belief (Falsified)
-User believes: "We follow clean architecture" — USER_MISALIGNMENT, delta -0.80
-
-## Corrected Understanding (Hypothesis)
-User's mental model is clean architecture; actual is modular monolith. Gap causes wrong architectural decisions.
-
-## Verification Protocol
-1. Present import graph showing cross-layer imports
-2. Ask user to describe their mental model
-3. Co-create accurate architecture documentation
-4. Update ADR-001 or create new ADR
-
-## Success Criteria
-- User acknowledges modular monolith pattern
-- Architecture doc updated to reflect reality
-- Future decisions use correct model
-
-## Knowledge Artifact Template
-- **Type**: User Mental Model Alignment Doc
-- **Location**: `.claude/knowledge/learning-units/user-architecture-model.md`
-- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/user-architecture-model.md`
-- **Integration**: Tag for `using-agent-skills` pre-check, `planning-and-task-breakdown`
-
-## Status
-PENDING → IN_PROGRESS → VERIFIED → PERSISTED
-```
-
-```markdown
-# LEARNING_UNIT-019 (User: USER_TACIT_GAP)
-## Learning Objective
-Enforce Money type for all monetary values; eliminate float price calculations.
-
-## Current Belief (Falsified)
-User tacitly assumes all prices in cents — USER_TACIT_GAP, delta -0.65
-
-## Corrected Understanding (Hypothesis)
-95% of codebase correctly uses Money type (cents), but legacy billing/ uses float → financial rounding errors.
-
-## Verification Protocol
-1. Type-check all price calculations across workspace
-2. Identify all float price usages in billing/
-3. Create migration plan for legacy billing to Money type
-4. Add linting rule: "no float for monetary values"
-
-## Success Criteria
-- Zero float price calculations in workspace
-- Linting rule enforced in CI
-- Legacy billing migrated to Money type
-
-## Knowledge Artifact Template
-- **Type**: Domain Convention + Linting Rule
-- **Location**: `.claude/knowledge/learning-units/money-type-enforcement.md`
-- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/money-type-enforcement.md`
-- **Integration**: Tag for `code-review-and-quality`, `context-engineering`
-
-## Status
-PENDING → IN_PROGRESS → VERIFIED → PERSISTED
-```
-
-```markdown
-# LEARNING_UNIT-027 (User: USER_GOAL_TASK_MISMATCH)
-## Learning Objective
-Calibrate effort estimates to workspace reality for auth module.
-
-## Current Belief (Falsified)
-User estimates: "Quick auth refactor (2 days)" — USER_GOAL_TASK_MISMATCH, Critical
-
-## Corrected Understanding (Hypothesis)
-Auth module requires 3-week stabilization: 50% test coverage, 3 circular deps, no interfaces. Quick refactor impossible.
-
-## Verification Protocol
-1. Run full dependency analysis on auth module
-2. Measure test coverage per file
-3. Identify circular dependency chains
-4. Create phased refactor plan with milestones
-
-## Success Criteria
-- Realistic effort estimate documented (3 weeks)
-- Phased plan with measurable milestones
-- User acknowledges revised timeline
-
-## Knowledge Artifact Template
-- **Type**: Effort Calibration Doc
-- **Location**: `.claude/knowledge/learning-units/auth-refactor-effort.md`
-- **Memory Pointer**: Add to `.claude/projects/<proj>/memory/auth-refactor-effort.md`
-- **Integration**: Tag for `planning-and-task-breakdown`, `using-agent-skills` pre-check
-
-## Status
-PENDING → IN_PROGRESS → VERIFIED → PERSISTED
-```
+The only per-category variation is the **Current Belief** field: model units cite the model's assumption, `USER_MISALIGNMENT`/`USER_GOAL_TASK_MISMATCH` cite the user's stated goal or mental model, and `USER_TACIT_GAP` cites what the user tacitly assumed. Everything else follows the schema above.
 
 **Output:** Individual `.md` files in `.claude/knowledge/learning-units/<id>.md`
 
