@@ -185,9 +185,15 @@ Control the run through environment variables — this is what makes it portable
 | `SELF_AUDIT_WORKSPACE` | `.` | Workspace root to audit |
 | `SELF_AUDIT_KNOWLEDGE_ROOT` | `<workspace>/.claude/knowledge/` | Where artifacts are written |
 | `SELF_AUDIT_MEMORY_ROOT` | `<workspace>/.claude/projects/<slug>/memory/` | Memory system root |
+| `SELF_AUDIT_MODE` | `deep` | Default depth mode (`quick` / `standard` / `deep`) |
 | `SELF_AUDIT_CROSS_MODEL` | `true` | Cross-model validation (deep mode) |
 | `SELF_AUDIT_TREND_ANALYSIS` | `true` | Historical trend analysis (deep mode) |
-| `SELF_AUDIT_VERBOSE` | `false` | Verbose logging |
+| `SELF_AUDIT_VERBOSE` | `false` | Verbose logging (per-assumption evidence + blind-spot details) |
+| `SELF_AUDIT_MAX_ASSUMPTIONS` | `0` (auto) | Cap assumptions tested (0 = mode default) |
+| `SELF_AUDIT_QUICK_TOP_N` | `5` | Blind spots ranked in quick mode |
+| `SELF_AUDIT_BLIND_SPOT_THRESHOLD` | `0.3` | Min \|confidence delta\| to escalate to a blind spot |
+| `SELF_AUDIT_CROSS_MODEL_REVIEWERS` | `2` | Number of cross-model reviewers (deep mode) |
+| `SELF_AUDIT_TREND_MIN_SESSIONS` | `2` | Min sessions before trend direction is computed |
 
 ---
 

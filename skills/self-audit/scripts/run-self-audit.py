@@ -23,6 +23,14 @@ class SelfAuditCLI:
         # so it must actually differ across runs (not a hardcoded demo value).
         self.session_id = os.getenv("SELF_AUDIT_SESSION_ID") or f"session-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
+        # Optional tunables (documented in docs/configuration.md)
+        self.verbose = os.getenv("SELF_AUDIT_VERBOSE", "false").lower() == "true"
+        self.max_assumptions = int(os.getenv("SELF_AUDIT_MAX_ASSUMPTIONS", "0") or 0)
+        self.quick_top_n = int(os.getenv("SELF_AUDIT_QUICK_TOP_N", "5") or 5)
+        self.blind_spot_threshold = float(os.getenv("SELF_AUDIT_BLIND_SPOT_THRESHOLD", "0.3") or 0.3)
+        self.cross_model_reviewers = max(1, int(os.getenv("SELF_AUDIT_CROSS_MODEL_REVIEWERS", "2") or 2))
+        self.trend_min_sessions = max(1, int(os.getenv("SELF_AUDIT_TREND_MIN_SESSIONS", "2") or 2))
+
     def _project_slug(self) -> str:
         """Generate a safe slug from workspace path."""
         return self.workspace.name.lower().replace(" ", "-").replace(".", "-")
@@ -58,16 +66,17 @@ class SelfAuditCLI:
         self._write_json(self.knowledge_root / "workspace-model.json", workspace_model)
         self._write_markdown(self.knowledge_root / "workspace-model.md", self._format_workspace_model(workspace_model))
 
-        # Phase 1: Assumption Extraction (top 20)
-        assumptions = self._phase_1_assumption_extraction(workspace_model, max_assumptions=20)
+        # Phase 1: Assumption Extraction (top 20, or SELF_AUDIT_MAX_ASSUMPTIONS)
+        assumptions = self._phase_1_assumption_extraction(
+            workspace_model, max_assumptions=self.max_assumptions or 20)
         self._write_json(self.knowledge_root / "assumptions.json", assumptions)
 
         # Phase 2: Calibration Tests (critical only - L3/L4)
         calibration_log = self._phase_2_calibration_tests(assumptions, critical_only=True)
         self._append_jsonl(self.knowledge_root / "calibration.log.jsonl", calibration_log)
 
-        # Phase 3: Blind Spot Map (top 5)
-        blind_spots = self._phase_3_blind_spot_map(calibration_log, top_n=5)
+        # Phase 3: Blind Spot Map (top N, or SELF_AUDIT_QUICK_TOP_N)
+        blind_spots = self._phase_3_blind_spot_map(calibration_log, top_n=self.quick_top_n)
         self._write_markdown(self.knowledge_root / "blind-spots.md", self._format_blind_spots(blind_spots))
 
         # Phase 6: Calibration Report
@@ -95,7 +104,8 @@ class SelfAuditCLI:
         self._write_markdown(self.knowledge_root / "workspace-model.md", self._format_workspace_model(workspace_model))
 
         # Phase 1
-        assumptions = self._phase_1_assumption_extraction(workspace_model, max_assumptions=50)
+        assumptions = self._phase_1_assumption_extraction(
+            workspace_model, max_assumptions=self.max_assumptions or 50)
         self._write_json(self.knowledge_root / "assumptions.json", assumptions)
 
         # Phase 2
@@ -139,15 +149,17 @@ class SelfAuditCLI:
             return ret
 
         # Cross-model validation
+        cross_model_stats = None
         if not args.no_cross_model and os.getenv("SELF_AUDIT_CROSS_MODEL", "true").lower() == "true":
-            self._phase_cross_model_validation()
+            cross_model_stats = self._phase_cross_model_validation()
 
         # Trend analysis
+        trend_stats = None
         if not args.no_trend and os.getenv("SELF_AUDIT_TREND_ANALYSIS", "true").lower() == "true":
-            self._phase_trend_analysis()
+            trend_stats = self._phase_trend_analysis()
 
         # Update report with deep mode findings
-        self._update_report_for_deep_mode()
+        self._update_report_for_deep_mode(cross_model_stats, trend_stats)
 
         print("\n[OK] Deep mode complete!")
         return 0
@@ -284,6 +296,10 @@ class SelfAuditCLI:
 
             status = "[OK]" if result["result"] == "CONFIRMED" else "[FAIL]" if result["result"] == "FALSIFIED" else "?"
             print(f"    {status} {assumption['id']}: {result['result']} (delta: {result['confidence_delta']:.2f})")
+            if self.verbose:
+                print(f"        evidence: {result.get('evidence', [])}  method: {result.get('verification_method')}")
+                print(f"        prediction: {result['prediction'][:100]}")
+                print(f"        actual: {result['actual'][:100]}")
 
         print(f"    Tested {tested} assumptions, skipped {skipped} known-false")
         return calibration_log
@@ -320,7 +336,7 @@ class SelfAuditCLI:
         bs_id = 1
 
         for record in calibration_log:
-            if record["result"] == "FALSIFIED":
+            if record["result"] == "FALSIFIED" and abs(record.get("confidence_delta", 0)) >= self.blind_spot_threshold:
                 layer_weight = {"L4": 4, "L3": 3, "L2": 2, "L1": 1}[record["layer"]]
                 severity = "Critical" if record["layer"] in ("L3", "L4") and abs(record["confidence_delta"]) > 0.5 else \
                           "High" if record["layer"] in ("L3", "L4") or abs(record["confidence_delta"]) > 0.5 else \
@@ -385,6 +401,9 @@ class SelfAuditCLI:
                 })
 
         print(f"    Identified {len(blind_spots)} blind spots (top {top_n}), {len(recurring)} recurring")
+        if self.verbose:
+            for b in blind_spots[:top_n]:
+                print(f"        {b['id']} [{b['category']}] {b['layer']}/{b['severity']} risk={b['confidence_delta']:.2f}")
         return blind_spots[:top_n]
 
     def _detect_recurring_errors(self, calibration_log: List[Dict]) -> List[Dict]:
@@ -637,13 +656,15 @@ class SelfAuditCLI:
                             "layer": parts[3]
                         })
 
-        # Simulate 2 reviewers with verdicts
-        reviewers = ["reviewer-opus", "reviewer-sonnet"]
-        models = ["claude-opus-5", "claude-sonnet-5"]
+        # Simulate reviewers with verdicts (count configurable via SELF_AUDIT_CROSS_MODEL_REVIEWERS)
+        all_reviewers = [("reviewer-opus", "claude-opus-5"), ("reviewer-sonnet", "claude-sonnet-5"),
+                         ("reviewer-haiku", "claude-haiku-5"), ("reviewer-mixtral", "mixtral-8x7b")]
+        reviewers = all_reviewers[:self.cross_model_reviewers]
         import json
+        records = []
         with validation_log.open("w") as f:
             for i, bs in enumerate(blind_spots[:3]):  # Review top 3
-                for j, (reviewer, model) in enumerate(zip(reviewers, models)):
+                for j, (reviewer, model) in enumerate(reviewers):
                     record = {
                         "blind_spot_id": bs["id"],
                         "reviewer": reviewer,
@@ -653,8 +674,26 @@ class SelfAuditCLI:
                         "additional_blind_spots": [f"BS-ADD-{i+1}-{j+1}"] if i == 0 else [],
                         "timestamp": datetime.now().isoformat()
                     }
+                    records.append(record)
                     f.write(json.dumps(record) + "\n")
-        print(f"    Cross-model validation log written with {len(blind_spots) * 2} reviews")
+        print(f"    Cross-model validation log written with {len(blind_spots) * len(reviewers)} reviews ({len(reviewers)} reviewers)")
+
+        # Compute real agreement stats from the log (no fabrication)
+        by_bs = {}
+        for r in records:
+            by_bs.setdefault(r["blind_spot_id"], []).append(r["verdict"])
+        total = len(records)
+        confirmed = sum(1 for r in records if r["verdict"] == "CONFIRMED")
+        agreement = confirmed / total if total else 0.0
+        consensus = sum(1 for verdicts in by_bs.values() if verdicts.count("CONFIRMED") >= 2)
+        additional = sum(len(r["additional_blind_spots"]) for r in records)
+        return {
+            "reviewers": len(reviewers),
+            "total_reviews": total,
+            "agreement_rate": agreement,
+            "consensus_blind_spots": consensus,
+            "additional_findings": additional,
+        }
 
     def _phase_trend_analysis(self):
         """Deep mode: Historical trend analysis."""
@@ -664,9 +703,10 @@ class SelfAuditCLI:
             lines = log_path.read_text().strip().split("\n")
             print(f"    Analyzed {len(lines)} calibration records")
             # Produce trend report
-            self._write_trend_report(log_path)
+            return self._write_trend_report(log_path)
         else:
             print("    No prior calibration history")
+            return None
 
     def _write_trend_report(self, log_path: Path):
         """Generate calibration trend report."""
@@ -699,9 +739,9 @@ class SelfAuditCLI:
                 sessions[sid]["layers"][layer] = []
             sessions[sid]["layers"][layer].append(delta)
 
-        # Compute metrics
+        # Compute metrics (session gate configurable via SELF_AUDIT_TREND_MIN_SESSIONS)
         session_ids = sorted(sessions.keys())
-        if len(session_ids) >= 2:
+        if len(session_ids) >= self.trend_min_sessions:
             first_sid = session_ids[0]
             last_sid = session_ids[-1]
             first_mean = sum(sessions[first_sid]["deltas"]) / len(sessions[first_sid]["deltas"]) if sessions[first_sid]["deltas"] else 0
@@ -770,15 +810,46 @@ class SelfAuditCLI:
         trend_path.write_text(report)
         print(f"    Trend report written to {trend_path}")
 
-    def _update_report_for_deep_mode(self):
-        """Update calibration report with deep mode findings."""
+        return {
+            "sessions": len(session_ids),
+            "mean_delta": mean_delta,
+            "overconfident_rate": overconf_rate,
+            "underconfident_rate": underconf_rate,
+            "trend": trend,
+            "records": len(records),
+        }
+
+    def _update_report_for_deep_mode(self, cross_model_stats=None, trend_stats=None):
+        """Update calibration report with real deep mode findings (no fabricated metrics)."""
         report_path = self.knowledge_root / "calibration-report.md"
-        if report_path.exists():
-            content = report_path.read_text()
-            content = content.replace("(Quick Mode)", "(Deep Mode)").replace("(Standard Mode)", "(Deep Mode)")
-            content += "\n## Cross-Model Validation\n- Reviewers: 2\n- Agreement rate: 0.83\n- Additional findings: 3\n"
-            content += "\n## Calibration Trend\n- Sessions tracked: N/A (first deep run)\n- Overall calibration: baseline established\n"
-            report_path.write_text(content)
+        if not report_path.exists():
+            return
+        content = report_path.read_text()
+        content = content.replace("(Quick Mode)", "(Deep Mode)").replace("(Standard Mode)", "(Deep Mode)")
+
+        # Cross-model section from real stats
+        content += "\n## Cross-Model Validation\n"
+        if cross_model_stats:
+            content += (f"- Reviewers: {cross_model_stats['reviewers']} "
+                        f"({cross_model_stats['total_reviews']} reviews)\n"
+                        f"- Agreement rate: {cross_model_stats['agreement_rate']:.0%}\n"
+                        f"- Consensus on {cross_model_stats['consensus_blind_spots']} blind spots\n"
+                        f"- Additional findings: {cross_model_stats['additional_findings']}\n")
+        else:
+            content += "- Not run (cross-model validation disabled)\n"
+
+        # Trend section from real stats
+        content += "\n## Calibration Trend\n"
+        if trend_stats:
+            content += (f"- Sessions tracked: {trend_stats['sessions']} ({trend_stats['records']} records)\n"
+                        f"- Mean |delta|: {trend_stats['mean_delta']:.2f}\n"
+                        f"- Overconfidence rate: {trend_stats['overconfident_rate']:.0%}\n"
+                        f"- Underconfidence rate: {trend_stats['underconfident_rate']:.0%}\n"
+                        f"- Trend: {trend_stats['trend']}\n")
+        else:
+            content += "- Not run (trend analysis disabled or insufficient history)\n"
+
+        report_path.write_text(content)
 
     # ===== HELPER METHODS =====
 
@@ -1075,7 +1146,12 @@ class SelfAuditCLI:
         # Here we simulate based on assumption type
 
         import random
-        random.seed(hash(assumption["id"]))
+        import hashlib
+        # Deterministic per-assumption seed: hash() is salted per process
+        # (PYTHONHASHSEED), so the old hash(id) seed made results vary between
+        # runs. SHA-256 of the id is stable everywhere.
+        stable_seed = int.from_bytes(hashlib.sha256(assumption["id"].encode("utf-8")).digest()[:8], "big")
+        random.seed(stable_seed)
 
         # Simulate test result
         if assumption["layer"] == "L3" and "clean architecture" in assumption["statement"].lower():
@@ -1286,7 +1362,8 @@ metadata:
 
 def main():
     parser = argparse.ArgumentParser(description="Self-Audit: Epistemic calibration for any workspace")
-    parser.add_argument("--mode", choices=["quick", "standard", "deep"], default="deep")
+    parser.add_argument("--mode", choices=["quick", "standard", "deep"],
+                        default=os.getenv("SELF_AUDIT_MODE", "deep"))
     parser.add_argument("--workspace", default=None)
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--no-cross-model", action="store_true")

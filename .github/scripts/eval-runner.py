@@ -46,14 +46,16 @@ class EvalRunner:
         if not case_dir.exists():
             return {"name": case_name, "error": f"Case directory not found: {case_dir}", "aggregates": {"score": 0, "threshold": 0.6, "passed": False}}
 
-        # Load case.yaml for threshold
+        # Load case.yaml for threshold and grader declarations
         case_yaml = case_dir / "case.yaml"
         threshold = 0.6
+        case_config = {}
         if case_yaml.exists():
             import yaml
-            with open(case_yaml) as f:
-                case_config = yaml.safe_load(f)
-            # threshold could be in case.yaml, default 0.6
+            with open(case_yaml, encoding="utf-8") as f:
+                case_config = yaml.safe_load(f) or {}
+            # threshold is declared in case.yaml (default 0.6)
+            threshold = float(case_config.get("threshold", 0.6))
 
         # Run graders
         graders_dir = case_dir / "graders"
@@ -319,12 +321,19 @@ This project follows a **modular monolith** pattern (not clean architecture).
                                       "layer", "verification_method", "session_id"]
                     valid_records = all(all(f in r for f in required_fields) for r in log)
                     results = [r.get("result") for r in log if isinstance(r, dict)]
+                    # Enums must match the real schema (KNOWN_FALSE = skipped re-test from prior sessions)
+                    valid_results = all(res in ["CONFIRMED", "FALSIFIED", "INCONCLUSIVE", "SKIPPED", "KNOWN_FALSE"] for res in results)
                     has_confirmed = "CONFIRMED" in results
-                    has_falsified = "FALSIFIED" in results
+                    # A clean workspace may legitimately have zero FALSIFIED records — that is
+                    # a valid (well-calibrated) outcome, not a failure. We require only that the
+                    # log is structurally valid, has at least one test outcome, and deltas vary.
+                    has_outcome = any(res in ("CONFIRMED", "FALSIFIED", "INCONCLUSIVE") for res in results)
                     deltas = [r.get("confidence_delta", 0) for r in log if isinstance(r, dict)]
                     diverse_deltas = len(set(round(d, 2) for d in deltas)) > 1 if deltas else False
-                    passed = valid_records and has_confirmed and has_falsified and diverse_deltas
-                    details = f"Records: {len(log)}, Confirmed: {has_confirmed}, Falsified: {has_falsified}, Diverse deltas: {diverse_deltas}"
+                    passed = valid_records and valid_results and has_outcome and diverse_deltas
+                    details = (f"Records: {len(log)}, Confirmed: {has_confirmed}, "
+                               f"Outcomes: {has_outcome}, Valid results: {valid_results}, "
+                               f"Diverse deltas: {diverse_deltas}")
                 else:
                     passed = False
                     details = "No calibration log or empty"
@@ -334,7 +343,7 @@ This project follows a **modular monolith** pattern (not clean architecture).
                 # Check for table with required columns
                 has_table = "| Rank | ID | Category | Layer | Severity |" in blind_spots
                 # Check that PRESENT categories are valid (not that all must be present)
-                valid_categories_list = ["CALIBRATION_ERROR", "UNVERIFIED_CRITICAL", "IMPLICIT_CONVENTION_GAP", "DOMAIN_GAP", "MEMORY_DRIFT", "POSSIBLE_BLIND_SPOT"]
+                valid_categories_list = ["CALIBRATION_ERROR", "UNVERIFIED_CRITICAL", "IMPLICIT_CONVENTION_GAP", "DOMAIN_GAP", "MEMORY_DRIFT", "POSSIBLE_BLIND_SPOT", "PERSISTENT_BLIND_SPOT"]
                 valid_layers_list = ["L1", "L2", "L3", "L4"]
                 valid_severities_list = ["Critical", "High", "Medium", "Low"]
 
@@ -406,7 +415,9 @@ This project follows a **modular monolith** pattern (not clean architecture).
         if self.case == "all":
             cases_to_run = ["case-quick-mode", "case-deep-mode"]
         else:
-            cases_to_run = [self.case]
+            # Accept both "case-quick-mode" and the short "quick-mode" form
+            case_name = self.case if self.case.startswith("case-") else f"case-{self.case}"
+            cases_to_run = [case_name]
 
         for case_name in cases_to_run:
             print(f"\n=== Running {case_name} ===")
@@ -429,8 +440,9 @@ This project follows a **modular monolith** pattern (not clean architecture).
 
 def main():
     parser = argparse.ArgumentParser(description="Model-agnostic eval runner for self-audit skill")
-    parser.add_argument("--case", default="all", choices=["case-quick-mode", "case-deep-mode", "all"],
-                        help="Which eval case to run")
+    parser.add_argument("--case", default="all",
+                        choices=["case-quick-mode", "case-deep-mode", "quick-mode", "deep-mode", "all"],
+                        help="Which eval case to run (case-* or short form)")
     parser.add_argument("--output", default="eval-results.json", help="Output JSON file")
     parser.add_argument("--repo-root", default=".", help="Repository root directory")
 

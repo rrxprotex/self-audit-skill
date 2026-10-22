@@ -6,12 +6,12 @@ Verify that calibration.log.jsonl contains valid calibration records with correc
 ## Pass Criteria
 1. File is valid JSONL (one JSON object per line)
 2. Each record has required fields: `assumption_id`, `timestamp`, `prediction`, `actual`, `evidence`, `result`, `confidence_delta`, `new_status`, `layer`, `verification_method`, `session_id`
-3. `result` is one of: `CONFIRMED`, `FALSIFIED`, `INCONCLUSIVE`, `SKIPPED`
+3. `result` is one of: `CONFIRMED`, `FALSIFIED`, `INCONCLUSIVE`, `SKIPPED`, `KNOWN_FALSE`
 4. `new_status` matches `result`:
    - `CONFIRMED` → `FACT` or `WORKSPACE_CONVENTION`
-   - `FALSIFIED` → `CALIBRATION_ERROR`
+   - `FALSIFIED` → `CALIBRATION_ERROR` (or `PERSISTENT_CALIBRATION_ERROR` when recurring)
    - `INCONCLUSIVE` → `UNVERIFIED_PATTERN`
-   - `SKIPPED` → original status
+   - `SKIPPED` / `KNOWN_FALSE` → original status (recorded for continuity)
 5. `confidence_delta` is a number (negative for falsified, positive for confirmed, ~0 for inconclusive)
 6. `layer` is one of: `L1`, `L2`, `L3`, `L4`
 7. At least 1 record has `result: FALSIFIED` (calibration error detected)
@@ -40,7 +40,7 @@ required = ["assumption_id", "timestamp", "prediction", "actual", "evidence", "r
 for r in records:
     for field in required:
         assert field in r, f"Missing field: {field}"
-    assert r["result"] in ["CONFIRMED", "FALSIFIED", "INCONCLUSIVE", "SKIPPED"]
+    assert r["result"] in ["CONFIRMED", "FALSIFIED", "INCONCLUSIVE", "SKIPPED", "KNOWN_FALSE"]
     assert r["layer"] in ["L1", "L2", "L3", "L4"]
     assert isinstance(r["confidence_delta"], (int, float))
 
@@ -49,7 +49,7 @@ for r in records:
     if r["result"] == "CONFIRMED":
         assert r["new_status"] in ["FACT", "WORKSPACE_CONVENTION"]
     elif r["result"] == "FALSIFIED":
-        assert r["new_status"] == "CALIBRATION_ERROR"
+        assert r["new_status"] in ["CALIBRATION_ERROR", "PERSISTENT_CALIBRATION_ERROR"]
     elif r["result"] == "INCONCLUSIVE":
         assert r["new_status"] == "UNVERIFIED_PATTERN"
 

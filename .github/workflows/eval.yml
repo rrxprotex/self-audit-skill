@@ -8,11 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       case:
-        description: 'Eval case to run (quick-mode, deep-mode, or all)'
+        description: 'Eval case to run (case-quick-mode, case-deep-mode, or all)'
         required: false
         default: 'all'
         type: choice
-        options: [quick-mode, deep-mode, all]
+        options: [case-quick-mode, case-deep-mode, all]
 
 jobs:
   eval:

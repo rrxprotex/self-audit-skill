@@ -1,24 +1,42 @@
 name: case-deep-mode
 description: Deep mode calibration includes cross-model validation and trend analysis
-prompt: |
-  Run self-audit deep mode with cross-model validation. Include trend analysis from prior calibration.log.
-schema_version: "1.0"
+prompt: 'Run self-audit deep mode with cross-model validation. Include trend analysis
+  from prior calibration.log.
+
+  '
+schema_version: '1.0'
 graders:
-  - name: cross-model-validation
-    type: llm
-    criteria: |
-      Verify cross-model validation produced valid log:
-      - .claude/knowledge/cross-model-validation.log.jsonl exists and is valid JSONL
-      - Each record has: blind_spot_id, reviewer, model, verdict, notes, additional_blind_spots, timestamp
-      - verdict in [CONFIRMED, REFUTED, PARTIAL, ADDITIONAL_FINDING]
-      - At least 2 distinct reviewers (different model names)
-      - At least 1 blind spot with CONFIRMED from ≥2 reviewers
-      - Additional blind spots discovered by reviewers (additional_blind_spots not empty for at least 1)
-  - name: trend-analysis
-    type: llm
-    criteria: |
-      Verify trend analysis produced valid report:
-      - .claude/knowledge/calibration-trend-report.md exists with sections: Sessions Analyzed, Overall Calibration, By Layer, Persistent Weak Spots, Recommendations
-      - calibration-report.md updated with "Cross-Model Validation" and "Calibration Trend" sections
-      - If ≥3 sessions in log, trend direction (IMPROVING/DEGRADING/STABLE) computed
-      - Metrics computed from actual log data (mean |Δ|, overconfidence rate, underconfidence rate)
+- name: cross-model-validation
+  type: static
+  criteria: 'Verify cross-model validation produced valid log:
+
+    - .claude/knowledge/cross-model-validation.log.jsonl exists and is valid JSONL
+
+    - Each record has: blind_spot_id, reviewer, model, verdict, notes, additional_blind_spots,
+    timestamp
+
+    - verdict in [CONFIRMED, REFUTED, PARTIAL, ADDITIONAL_FINDING]
+
+    - At least 2 distinct reviewers (different model names)
+
+    - At least 1 blind spot with CONFIRMED from ≥2 reviewers
+
+    - Additional blind spots discovered by reviewers (additional_blind_spots not empty
+    for at least 1)
+
+    '
+- name: trend-analysis
+  type: static
+  criteria: 'Verify trend analysis produced valid report:
+
+    - .claude/knowledge/calibration-trend-report.md exists with sections: Sessions
+    Analyzed, Overall Calibration, By Layer, Persistent Weak Spots, Recommendations
+
+    - calibration-report.md updated with "Cross-Model Validation" and "Calibration
+    Trend" sections
+
+    - If ≥3 sessions in log, trend direction (IMPROVING/DEGRADING/STABLE) computed
+
+    - Metrics computed from actual log data (mean |Δ|, overconfidence rate, underconfidence
+    rate)'
+threshold: 0.8
