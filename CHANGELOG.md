@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-22
+
+### Added
+- **User-context calibration**: in addition to model assumptions, the skill now surfaces what the user needs/intends/knows (even when unarticulated) and maps goal-task and tacit-knowledge gaps (`--user-context`, USER_MISALIGNMENT / USER_GOAL_TASK_MISMATCH / USER_TACIT_GAP categories).
+- **Self-learning loop**: assumptions already FALSIFIED in prior sessions are recorded as `KNOWN_FALSE` and skipped instead of re-tested.
+- **Recurring error detection**: an assumption falsified 3+ times across sessions is escalated to `PERSISTENT_BLIND_SPOT` (Critical) with a recurring impact note.
+- **Learning-unit lifecycle**: real `PENDING → VERIFIED → PERSISTED` state machine, kept in sync across the `learning-units/` artifact and the memory copy; orphaned `PENDING` units from prior runs are advanced.
+- `.gitignore` for generated run artifacts and eval outputs.
+
+### Changed
+- README rewritten with genuine run output, a why-stars section, and explicit harness-agnostic positioning (plain Python + Markdown/JSONL, no API key, static evals).
+- Version aligned to `1.1.0` across `plugin.json` and `SKILL.md`.
+
 ## [1.0.0] - 2026-10-22
 
 ### Added
