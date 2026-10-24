@@ -38,9 +38,11 @@ Run it once and you get a set of durable artifacts under `.claude/knowledge/`:
 | `calibration.log.jsonl` | Append-only log of prediction → outcome → confidence delta |
 | `blind-spots.md` | Blind spots ranked by risk (severity × layer weight) |
 | `learning-units/LU-*.md` | Self-contained learnable units with verification protocols |
+| `analysis-findings.json` | **v1.3** domain-layer report: task resolution, findings, pattern candidates, blind-spot candidates (schema-validated) |
+| `domain-model.md` | **v1.3** subject-specific concept map (standard/deep) |
 | `calibration-report.md` / `calibration-summary.json` | Human + machine-readable audit summary |
 | `calibration-trend-report.md` | Calibration improvement across sessions (deep mode) |
-| `cross-model-validation.log.jsonl` | Adversarial reviewer verdicts (deep mode) |
+| `cross-model-validation.log.jsonl` | Real external reviewer verdicts (deep mode; `NOT_RUN` marker in the report when no reviewer is configured — never fabricated) |
 | `dashboard.html` | Self-contained visual dashboard of the calibration data (inline SVG, offline) |
 
 Every finding is classified along two axes:
@@ -58,6 +60,9 @@ This is genuine output from running Self-Audit **on its own repository**:
 [SCAN] Self-Audit starting...
    Workspace: C:\Users\mozarc\self-audit-skill
    Mode: deep
+   Target: workspace | Stakes: medium
+
+[PHASE] DEEP MODE: Standard + Cross-Model Validation + Trend Analysis
 
 [PHASE] STANDARD MODE: Phase 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6
   Phase 0: Mapping workspace...
@@ -65,36 +70,55 @@ This is genuine output from running Self-Audit **on its own repository**:
   Phase 1: Extracting assumptions...
     Extracted 7 assumptions
   Phase 2: Running calibration tests...
-    [MEMORY] 1 assumptions already FALSIFIED (skipping re-test)
-    [OK] ASSUME-001: CONFIRMED (delta: 0.10)
-    [SKIP] ASSUME-003: KNOWN FALSE (from prior sessions)
-    ...
-    Tested 6 assumptions, skipped 1 known-false
+    [OK] ASSUME-007: CONFIRMED (delta: 0.30)
+    [FAIL] ASSUME-003: FALSIFIED (delta: -0.85)
+    [?] ASSUME-004: INCONCLUSIVE (delta: 0.00)
+    [?] ASSUME-005: INCONCLUSIVE (delta: 0.00)
+    [FAIL] ASSUME-006: FALSIFIED (delta: -0.85)
+    [OK] ASSUME-001: CONFIRMED (delta: 0.07)
+    [OK] ASSUME-002: CONFIRMED (delta: 0.05)
+    Tested 7 assumptions (budget 50), skipped 0 known-false
   Phase 3: Mapping blind spots...
-    Identified 1 blind spots (top 15), 1 recurring
+    Identified 2 blind spots (top 15), 0 recurring
+  Phase 4: Synthesizing learning units...
+    Created 2 learning units
   Phase 5: Updating knowledge base...
-    [PERSISTED] LU-PERSIST-001 (already cross-session verified)
+    [NEW] LU-001 -> VERIFIED (written to memory)
+    [NEW] LU-002 -> VERIFIED (written to memory)
+    Knowledge base: 2 new -> VERIFIED, 0 promoted, 0 PERSISTED (total: 2)
   Deep: Cross-model validation...
-    Cross-model validation log written with 2 reviews
+    NOT_RUN: no external reviewer command configured
   Deep: Historical trend analysis...
-    Analyzed 101 calibration records
+    Analyzed 7 calibration records
 ```
 
 And the resulting **blind-spot register**:
 
 ```markdown
-| Rank | ID          | Category             | Layer | Severity | Delta | Learning Unit  |
-|------|-------------|----------------------|-------|----------|-------|----------------|
-| 1    | BS-REC-001  | PERSISTENT_BLIND_SPOT| L3    | Critical | -0.70 | LU-PERSIST-001 |
+| Rank | ID     | Category            | Layer | Severity | Delta | Learning Unit |
+|------|--------|---------------------|-------|----------|-------|---------------|
+| 1    | BS-001 | CALIBRATION_ERROR   | L3    | Critical | -0.85 | LU-001        |
+| 2    | BS-002 | CALIBRATION_ERROR   | L3    | Critical | -0.85 | LU-002        |
 
-### BS-REC-001 -- Critical L3 PERSISTENT_BLIND_SPOT
+### BS-001 -- Critical L3 CALIBRATION_ERROR
 - **Assumption**: Workspace follows Clean architecture layers (domain/app/infra)
-- **Evidence**: Import graph shows modular monolith pattern, not clean architecture layers
-- **Impact**: RECURRING: 6x falsified across sessions
-- **Verification Protocol**: Document l3 convention in ADR and enforce
+- **Evidence**: Complete directory inventory shows no layer separation: docs/, evals/, skills/, templates/
 ```
 
-Notice the **self-learning loop**: a previously-falsified assumption (`ASSUME-003`) is *skipped*, not re-tested, and the recurring error is escalated to `PERSISTENT_BLIND_SPOT` with its learning unit marked `PERSISTED`. That continuity is the whole point.
+Note what the output *refuses* to do: `ASSUME-004`/`ASSUME-005` stay `INCONCLUSIVE` because this repo's docs only *mention* monolith/microservice patterns in worked examples — prose is not behavior, so a keyword match never "confirms" a claim. Everything that is `CONFIRMED` or `FALSIFIED` is backed by a real observation made during the run.
+
+Run it again and the **self-learning loop** kicks in — the falsified assumptions are remembered, not re-tested:
+
+```text
+    [MEMORY] 2 assumptions already FALSIFIED (skipping re-test)
+    [SKIP] ASSUME-003: KNOWN FALSE (from prior sessions)
+    [SKIP] ASSUME-006: KNOWN FALSE (from prior sessions)
+    Tested 5 assumptions (budget 50), skipped 2 known-false
+    ...
+    Knowledge base: 0 new -> VERIFIED, 0 promoted, 4 PERSISTED (total: 0)
+```
+
+The corrections carried across sessions get promoted `VERIFIED → PERSISTED` (cross-session stable), and an assumption falsified 3+ times across sessions escalates to `PERSISTENT_BLIND_SPOT` with its learning unit marked `PERSISTED`. That continuity is the whole point.
 
 ---
 
@@ -130,7 +154,7 @@ Notice the **self-learning loop**: a previously-falsified assumption (`ASSUME-00
 
 ## Install
 
-**Requirements:** Python 3.10+, read/write access to `.claude/`, Claude Code v2.1.218+ (for `context: fork`, `background: true`).
+**Core requirements:** Python 3.10+ and read/write access to the workspace's knowledge/memory roots (`.claude/` by default). That's it — the engine is dependency-free and harness-agnostic. The Claude Code plugin install additionally wants Claude Code v2.1.218+ (for `context: fork`, `background: true`).
 
 ### Claude Code plugin (one-liner)
 
@@ -209,13 +233,14 @@ Control the run through environment variables — this is what makes it portable
 | `SELF_AUDIT_MODE` | `deep` | Default depth mode (`quick` / `standard` / `deep`) |
 | `SELF_AUDIT_TARGET` | `workspace` | What is being audited (`workspace` / `plan` / `diff` / `last-answer`) |
 | `SELF_AUDIT_STAKES` | `medium` | Verification budget (`low` / `medium` / `high`); sets default mode |
+| `SELF_AUDIT_SESSION_ID` | auto (`session-YYYYMMDD-HHMMSS`) | Session id for trend grouping — set it to correlate runs across harnesses |
 | `SELF_AUDIT_CROSS_MODEL` | `true` | Cross-model validation (deep mode) |
 | `SELF_AUDIT_TREND_ANALYSIS` | `true` | Historical trend analysis (deep mode) |
 | `SELF_AUDIT_VERBOSE` | `false` | Verbose logging (per-assumption evidence + blind-spot details) |
 | `SELF_AUDIT_MAX_ASSUMPTIONS` | `0` (auto) | Cap assumptions tested (0 = mode default) |
 | `SELF_AUDIT_QUICK_TOP_N` | `5` | Blind spots ranked in quick mode |
 | `SELF_AUDIT_BLIND_SPOT_THRESHOLD` | `0.3` | Min \|confidence delta\| to escalate to a blind spot |
-| `SELF_AUDIT_CROSS_MODEL_REVIEWERS` | `2` | Number of cross-model reviewers (deep mode) |
+| `SELF_AUDIT_EXTERNAL_REVIEWERS` | unset | Real external reviewer commands (JSON list of `{name, command}`); unset = `NOT_RUN`, never fabricated |
 | `SELF_AUDIT_TREND_MIN_SESSIONS` | `2` | Min sessions before trend direction is computed |
 | `SELF_AUDIT_USER_CONTEXT` | `false` | Also discover & calibrate user-context assumptions (intent, needs, tacit knowledge, goal-task fit) |
 
@@ -223,13 +248,16 @@ Control the run through environment variables — this is what makes it portable
 
 ## Works beyond Claude Code
 
-The **epistemic engine is plain Python + Markdown/JSONL**, so it runs anywhere an agent can execute a script and read/write files:
+The **epistemic engine is plain Python + Markdown/JSONL**, so it runs anywhere an agent can execute a script and read/write files — no account, no API key, no vendor runtime:
 
 - **Claude Code** — as a native skill (`/self-audit`), with memory + skill integration
-- **Codex / OpenCode / Cline / Cursor / Gemini CLI / Hermes** and any CLI, TUI, or desktop agent — invoke `run-self-audit.py` directly, or paste the `SKILL.md` as a system prompt
+- **CLI / TUI agents** — Codex, Gemini CLI, OpenCode, Aider, Hermes, and any shell-driven agent: invoke `run-self-audit.py` directly
+- **IDE agents & extensions** — VS Code (Copilot, Cline, Roo, Continue), JetBrains AI Assistant, Zed, Cursor: run the script from the integrated terminal or an agent task, and point the agent at `SKILL.md` as its instructions
+- **Desktop agent apps** — any desktop harness that can run Python and read/write a workspace (the artifacts are plain Markdown/JSONL you can open anywhere)
 - **CI** — run the audit on a schedule and diff the blind-spot map between runs
+- **Humans** — the scripts are plain `python script.py` with zero third-party dependencies; `generate-dashboard.py` renders the results as one offline HTML file
 
-No `ANTHROPIC_API_KEY` required. No LLM judge required for evals — the graders are static.
+The `SKILL.md` body works as a paste-in system prompt or agent instruction file in any harness; the YAML frontmatter is Claude Code plugin metadata (ignored elsewhere). No `ANTHROPIC_API_KEY` required. No LLM judge required for evals — the graders are static.
 
 ---
 

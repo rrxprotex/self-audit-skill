@@ -36,6 +36,16 @@ The Self-Audit skill implements a **6-phase epistemic calibration pipeline** tha
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+## Domain-Adaptive Analysis Layer (v1.3)
+
+The layer adds four bounded phases alongside the core pipeline: **0.6 Task Resolution** (persisted scope/purpose/limits), **0.7 Domain Model** (subject-specific concept map), **2.5 Pattern Candidates** (lexical nomination with content-deduped independence), **3.5 Blind-Spot Candidates** (missing checks, unsampled areas, drift). Division of labor: the skill agent does semantics (concept distinction, causal reasoning, category construction); Python scripts do evidence discipline (schema validation, scope recording, duplicate detection, depth control) and label every heuristic output `CANDIDATE` — never a finding.
+
+Artifacts: `analysis-findings.json` (schema v1, validated by `domain_analysis.py` — includes pattern records in its `patterns` key) and `domain-model.md`; `templates/pattern-register.md.template` is a manual reporting aid, not an emitted artifact. Depth rules: quick writes findings + blind-spot candidates only; standard/deep add domain model + patterns. Kill-switch: `SELF_AUDIT_DOMAIN_LAYER=false`.
+
+### Cross-Model Validation (honesty change, v1.3)
+
+Reviewers are real external commands (`SELF_AUDIT_EXTERNAL_REVIEWERS`, JSON list of `{name, command}`) that receive each blind-spot payload on stdin; verdicts are parsed from their stdout and bound to the reviewed blind-spot id. With no reviewer configured, validation is visibly `NOT_RUN` — no log is written, no reviewer identity is invented, and stale logs from prior runs are removed so they can never masquerade as reviews.
+
 ## Phase Details
 
 ### Phase 0: Workspace Map (Passive Scan)
@@ -69,11 +79,11 @@ For each convention, pattern, and structural element, generate assumption candid
 | Assumption Type | Template | Example |
 |-----------------|----------|---------|
 | Convention | "All X follow pattern Y" | "All config files use YAML" |
-| Behavioral | "Function X does Y when Z" | "`generate()` returns song object" |
+| Behavioral | "Function X does Y when Z" | "`serialize()` returns a JSON string" |
 | Invariant | "Condition X never occurs" | "No raw SQL in core module" |
 | Delegation | "Library X handles Y" | "pytest-asyncio handles async tests" |
 | Architectural | "System follows pattern X" | "Clean architecture layers" |
-| Domain | "Domain rule X applies" | "All songs use 126 BPM" |
+| Domain | "Domain rule X applies" | "All prices are stored in minor units (cents)" |
 
 **Output**: `ASSUMPTION_REGISTER.json` — Array of assumption objects with:
 - `id`, `type`, `statement`, `source_evidence`, `confidence`, `testable`, `layer`, `scope`, `falsifier`, `epistemic_status`
@@ -188,17 +198,22 @@ Content...
 
 ### Cross-Model Validation
 
-Spawns 2 fresh-context reviewer agents (per `doubt-driven-development` pattern):
+Runs **real external reviewer commands** configured via `SELF_AUDIT_EXTERNAL_REVIEWERS`
+(v1.3; previously simulated reviewers — removed):
 
-1. Each reviewer receives: `BLIND_SPOT_REGISTER` + relevant assumptions + workspace model
-2. Reviewer prompt: "Adversarially verify these calibration findings. Find errors, confirm falsifications, identify additional blind spots."
-3. Results logged to `CROSS_MODEL_VALIDATION.log.jsonl`
+1. Each reviewer receives one blind-spot payload (statement, evidence, impact,
+   learning objective, verification protocol) as JSON on stdin
+2. Reviewer prints a JSON verdict to stdout; only exit-code-0 runs are parsed
+3. Results logged to `cross-model-validation.log.jsonl` (command, exit_code,
+   verdict bound to the blind-spot id)
+4. With no reviewer configured: visible `NOT_RUN` marker in the report, no log,
+   stale logs from prior runs removed
 
-**Consensus Rules**:
-- Confirmed: ≥2 reviewers agree on falsification
-- Refuted: ≥2 reviewers find assumption was correct
-- Partial: Mixed verdicts → log as `CONTRADICTION`
-- Additional: New blind spots → add to register
+**Verdict Rules**:
+- Confirmed: reviewer verdict `CONFIRMED` from a successful run
+- Refuted: reviewer verdict `REFUTED`
+- Unparseable/non-zero-exit: recorded `UNPARSED`, never counted
+- Disagreements between reviewers: log as `CONTRADICTION`
 
 ### Historical Trend Analysis
 

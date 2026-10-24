@@ -1,0 +1,165 @@
+# ANALYSIS_FINDINGS Template
+
+Copy this file to `.claude/knowledge/analysis-findings.json` and fill in.
+Machine schema version 1 (validated by `scripts/domain_analysis.py --report`).
+
+---
+
+```json
+{
+  "schema_version": "1",
+  "subject": "sample-workspace",
+  "task_resolution": {
+    "stated_outcome": "what the user explicitly asked for",
+    "inferred_purpose": {
+      "purpose": "the likely underlying goal",
+      "labeled_as": "INFERENCE",
+      "basis": "why this inference is made — never present as user intent"
+    },
+    "object_of_analysis": "workspace",
+    "resource_scope": {"workspace": "/path/to/ws", "env_overrides": []},
+    "access_limits": ["plan/diff/last-answer targets have no CLI-side content ingestion"],
+    "complexity": "MULTISTEP",
+    "cost_of_error": "what being wrong costs the decision",
+    "verification_criteria": "how a correct result is confirmed",
+    "open_clarifications": ["decision-blocking questions only"]
+  },
+  "domain_model": {
+    "subject": "config-loading conventions",
+    "concepts": [
+      {
+        "name": "reservation",
+        "definition": "a temporary allocation that expires unless confirmed",
+        "distinguishes": [{"criterion": "expires without confirmation", "vs_concept": "hold"}],
+        "status": "ESTABLISHED"
+      }
+    ],
+    "coverage_notes": "which parts are missing or unclassified"
+  },
+  "findings": [
+    {
+      "id": "FIND-001",
+      "statement": "Config files mix YAML (root) and JSON (runtime)",
+      "category_path": "config.format.convention",
+      "layer": "L2",
+      "evidence_status": "OBSERVED",
+      "source_refs": ["config.yaml", "runtime/settings.json"],
+      "confidence_band": "HIGH",
+      "evidence_scope": "stated only when source_refs is empty — where was searched",
+      "uncertainty_reason": "required for every non-OBSERVED finding",
+      "alternative_explanations": ["optional: other ways to read the same finding"],
+      "counter_evidence": ["optional: evidence that could contradict this finding"],
+      "related_findings": ["FIND-002"],
+      "verification_method": "static_analysis",
+      "verification_status": "NOT_RUN",
+      "next_step": "the concrete action this finding implies",
+      "applies_when": "conditions under which this finding holds",
+      "supersedes": "FIND-000"
+    },
+    {
+      "id": "FIND-002",
+      "statement": "Runtime config loading duplicates the root loader",
+      "category_path": "config.loading.mechanism",
+      "layer": "L2",
+      "evidence_status": "OBSERVED",
+      "source_refs": ["src/main.py", "src/utils.py"],
+      "confidence_band": "MEDIUM"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "PAT-001",
+      "statement": "Recurring across 2 findings: <shared statement>",
+      "member_finding_ids": ["FIND-001", "FIND-002"],
+      "source_refs": ["src/main.py", "src/utils.py"],
+      "status": "CANDIDATE",
+      "lexical_signal": {"jaccard": 0.62},
+      "verification_status": "NOT_RUN",
+      "verification_evidence": ["commands/tool output cited only when a check actually ran"],
+      "independence": {
+        "distinct_sources": 2,
+        "note": "copies of the same content are ONE source, never independent evidence"
+      }
+    }
+  ],
+  "blind_spot_candidates": [
+    {
+      "id": "BSX-001",
+      "description": "the gap itself",
+      "why_it_matters": "which result it could change",
+      "smallest_useful_check": "the single cheapest check that would settle it"
+    }
+  ],
+  "scope": {
+    "inspected": ["src/", "docs/"],
+    "not_inspected": ["generated/"],
+    "note": "not-found means not found under the stated scope, never does-not-exist"
+  }
+}
+```
+
+---
+
+## Field Reference
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schema_version` | `"1"` | Yes | Domain-layer schema version |
+| `subject` | string | Yes | What was analyzed |
+| `task_resolution` | object | quick+ | Task/context resolution block (see below) |
+| `domain_model` | object | standard+ | Concept map (omitted entirely in quick mode) |
+| `findings[]` | array | Yes | Structured findings |
+| `patterns[]` | array | standard+ | Pattern records (omitted entirely in quick mode) |
+| `blind_spot_candidates[]` | array | Yes | Self-audit gap candidates |
+| `scope` | object | Yes | What was and was not inspected |
+
+### Finding fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `FIND-NNN` | Yes | Unique finding id |
+| `statement` | string | Yes | The finding, stated plainly |
+| `category_path` | string | Yes | 1–4 dot-separated segments, `[A-Za-z0-9_-]{2,60}` each |
+| `layer` | `L1–L4` | Yes | Abstraction layer (same scale as the rest of the skill) |
+| `evidence_status` | enum | Yes | See status semantics below |
+| `source_refs` | array | Yes | Real references; may be empty **only** with `evidence_scope` |
+| `confidence_band` | `HIGH\|MEDIUM\|LOW` | Yes | Qualitative band (measurement split, §2) |
+| `uncertainty_reason` | string | non-OBSERVED | Why the status is not OBSERVED |
+| `evidence_scope` | string | empty refs | Where was searched — a null search confirms nothing beyond its scope |
+| `verification_status` | `NOT_RUN\|RUN` | optional | Whether the finding's verification actually executed |
+| `verification_evidence` | array | VERIFIED patterns | Commands/tool output cited when a check actually ran |
+
+### Pattern fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `PAT-NNN` | Yes | Unique pattern id |
+| `member_finding_ids` | array | Yes | Findings supporting the pattern (must resolve) |
+| `status` | `VERIFIED\|PROBABLE\|CANDIDATE` | Yes | Gated: VERIFIED needs ≥2 distinct sources **and** `verification_status: "RUN"` with cited `verification_evidence`; PROBABLE needs ≥1 source; otherwise CANDIDATE |
+| `independence.distinct_sources` | int | Yes | Unique sources after content dedupe — repeated copies count once |
+| `lexical_signal` | object | CLI-nominated | Present when the candidate came from lexical nomination (never a promoted status) |
+
+### Blind-spot candidate fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `BSX-NNN` | Yes | Unique candidate id |
+| `description` | string | Yes | The gap |
+| `why_it_matters` | string | Yes | Which result it could change — never name a gap without this |
+| `smallest_useful_check` | string | Yes | The cheapest check that would settle it |
+
+## Evidence Status Semantics
+
+| Status | Meaning |
+|--------|---------|
+| `OBSERVED` | Directly seen this session — cited tool output (commands, file reads, real paths) |
+| `CANDIDATE` | Lexical/heuristic nomination — a signal to investigate, never a finding of fact |
+| `INFERRED` | Agent reasoning from cited evidence — requires `uncertainty_reason` and a recorded reasoning chain |
+| `HYPOTHESIS` | Explicitly unverified proposal — requires `uncertainty_reason` |
+| `UNVERIFIED_CLAIM` | Asserted without evidence — requires `uncertainty_reason`; never phrase as confirmed |
+
+**Honesty bounds:** heuristics nominate, agents decide with cited evidence. A check that never ran cannot back a `VERIFIED` claim — `verification_status` defaults to `NOT_RUN` and the validator rejects VERIFIED without `RUN` + cited evidence. Copies of identical content are one source, not independent evidence. A single occurrence is never a recurring-pattern conclusion.
+
+---
+
+*Generated by self-audit skill v1.3 (domain-adaptive layer).*

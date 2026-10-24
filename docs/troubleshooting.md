@@ -113,42 +113,44 @@ cat .claude/knowledge/calibration.log.jsonl
 
 # Run multiple sessions to build history
 /self-audit --mode quick  # Session 1
-/self-audit --mode quick  # Session 2 (different workspace or after changes)
-/self-audit --mode quick  # Session 3 → trend analysis now works
+/self-audit --mode quick  # Session 2 (different workspace or after changes) → trend analysis now works
 
-# Trend analysis requires ≥3 sessions by default
-export SELF_AUDIT_TREND_MIN_SESSIONS=2  # Lower threshold
+# Trend analysis requires ≥2 sessions by default
+export SELF_AUDIT_TREND_MIN_SESSIONS=3  # Raise threshold if you want a longer history
 /self-audit --mode deep
 ```
 
 ---
 
-### 5. Cross-Model Validation Fails
+### 5. Cross-Model Validation (NOT_RUN / reviewer issues)
+
+**v1.3 semantics:** cross-model validation runs ONLY when real external reviewer
+commands are configured via `SELF_AUDIT_EXTERNAL_REVIEWERS`. With no reviewer
+configured, the report visibly shows `NOT_RUN` — this is honest, not an error.
+No reviewer identity or verdict is ever fabricated.
 
 **Symptoms:**
-- "Cross-model validation failed" error
-- Reviewer agents not spawning
-- Validation log empty
+- Report shows `NOT_RUN: no external reviewer command configured`
+- Reviewer command fails or times out
+- Validation log empty or records show `UNPARSED`
 
 **Solutions:**
 
 ```bash
-# 1. Disable if not needed
+# 1. Accept NOT_RUN (default, honest) — nothing is wrong
+
+# 2. Configure real reviewer commands (JSON list; each receives the
+#    blind-spot payload as JSON on stdin and prints a JSON verdict)
+export SELF_AUDIT_EXTERNAL_REVIEWERS='[{"name": "my-reviewer", "command": "my-review-tool"}]'
+/self-audit --mode deep
+
+# 3. A reviewer that fails or prints unparseable output is recorded with
+#    verdict UNPARSED and never counts as a review — fix the command's
+#    output format (single JSON object with "verdict")
+
+# 4. Disable explicitly (distinct NOT_RUN marker in the report)
 export SELF_AUDIT_CROSS_MODEL=false
 /self-audit --mode deep
-
-# 2. Or use standard mode (no cross-model)
-/self-audit --mode standard
-
-# 3. Check API quota / rate limits
-# Cross-model spawns 2 subagents → uses API calls
-
-# 4. Reduce reviewers
-export SELF_AUDIT_CROSS_MODEL_REVIEWERS=1
-/self-audit --mode deep
-
-# 5. Check subagent permissions
-# Subagents inherit parent session permissions
 ```
 
 ---

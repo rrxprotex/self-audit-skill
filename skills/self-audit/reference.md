@@ -155,6 +155,31 @@ The Self-Audit skill implements a 6-phase epistemic calibration pipeline:
 ]
 ```
 
+### analysis-findings.json (v1.3 domain layer)
+
+Schema version 1 — validated by `scripts/domain_analysis.py --report`. Full field reference in `templates/analysis-findings.json.template`; enums are canonical:
+
+- `evidence_status`: `OBSERVED` (cited tool output this session) | `CANDIDATE` (heuristic nomination — never a finding) | `INFERRED` (agent reasoning, requires `uncertainty_reason`) | `HYPOTHESIS` (explicitly unverified) | `UNVERIFIED_CLAIM` (asserted without evidence)
+- `confidence_band`: `HIGH | MEDIUM | LOW` (measurement split, §2 — numeric confidence only for calibration-log entries)
+- pattern `status`: `VERIFIED` (≥2 independent sources after content dedupe + `verification_status: "RUN"` with cited `verification_evidence`) | `PROBABLE` (≥1 source) | `CANDIDATE` (nomination only)
+- `independence.distinct_sources`: copies of identical content count as ONE source
+- blind-spot candidates (`BSX-NNN`): `description`, `why_it_matters`, `smallest_useful_check` all required
+- `task_resolution.inferred_purpose` must carry `labeled_as: "INFERENCE"` — inferences are never presented as user intent
+
+Quick mode writes findings + blind-spot candidates only (no `domain_model`, no `patterns` keys — depth rules); standard/deep add the domain model and pattern sections.
+
+### domain-model.md (v1.3)
+
+Concept map for the analyzed subject: concepts with definitions, distinguishing criteria (criterion + vs_concept), status `ESTABLISHED|PROPOSED`, and coverage notes listing what is missing/unclassified. Template: `templates/domain-model.md.template`. PROPOSED categories are provisional — never presented as established knowledge.
+
+### pattern-register.md (v1.3) — manual reporting template
+
+Not emitted by the CLI: pattern records live inside `analysis-findings.json`
+`patterns`. `templates/pattern-register.md.template` is for agents building
+standalone pattern reports. Records carry linked findings, source refs,
+repetition scope, independence counts, and status gates. Single occurrence is
+never a recurring-pattern conclusion.
+
 ### CALIBRATION_LOG.jsonl (one record per line)
 
 ```json
@@ -174,7 +199,7 @@ The Self-Audit skill implements a 6-phase epistemic calibration pipeline:
   "corrected_belief": "string (result=FALSIFIED only — what the truth is; original prediction is retained)",
   "new_status": "FACT|WORKSPACE_CONVENTION|CALIBRATION_ERROR|UNVERIFIED_PATTERN",
   "layer": "L2",
-  "verification_method": "code_execution|static_analysis|doc_test_crossref|memory_crosscheck|expert_query",
+  "verification_method": "code_execution|static_analysis|doc_test_crossref|memory_crosscheck|expert_query|none",
   "search_scope": {"paths": ["string"], "ignore_rules": "string", "case_sensitive": "boolean", "file_types": ["string"]},
   "commands_ran": ["string"],
   "commands_assumed": ["string"]
@@ -534,6 +559,9 @@ learning units, cross-model validation, trend analysis, pre-load recommendations
 | `SELF_AUDIT_QUICK_TOP_N` | `20` | Top N assumptions for quick mode |
 | `SELF_AUDIT_BLIND_SPOT_THRESHOLD` | `0.5` | Min |confidence_delta| to register as blind spot |
 | `SELF_AUDIT_VERBOSE` | `false` | Verbose logging |
+| `SELF_AUDIT_DOMAIN_LAYER` | `true` | Domain-adaptive analysis layer (v1.3); `false` disables it entirely |
+| `SELF_AUDIT_AUDIT_PURPOSE` | `''` | Stated outcome for task resolution (`--audit-purpose`); empty = honestly labeled inferred |
+| `SELF_AUDIT_EXTERNAL_REVIEWERS` | unset | JSON list of `{"name": str, "command": str}` reviewer specs (deep mode); unset = `NOT_RUN`, never fabricated |
 
 ### Skill Arguments (from frontmatter `arguments`)
 
@@ -635,34 +663,55 @@ Each scan item (SKILL.md, Phase 3) with what catching it looks like:
 
 ## Cross-Model Validation (Deep Mode)
 
-### Reviewer Invocation
+### Reviewer Invocation (v1.3: real external commands)
 
-```bash
-# Spawn fresh-context reviewer agents
-# Each reviewer gets: BLIND_SPOT_REGISTER + relevant assumptions + workspace model
-# Reviewer prompt: "Adversarially verify these calibration findings. Find errors, confirm falsifications, identify additional blind spots."
-```
+Reviewers are **real external commands** configured via `SELF_AUDIT_EXTERNAL_REVIEWERS`
+(JSON list of `{"name": str, "command": str}`). Each reviewer receives the full
+blind-spot payload (id, category, layer, severity, statement, evidence, impact,
+learning objective, verification protocol) as JSON on stdin and prints a JSON
+verdict to stdout. No reviewer identity, model name, or verdict is ever
+fabricated — with no reviewer configured, validation is visibly `NOT_RUN`.
 
-### Validation Log Schema (CROSS_MODEL_VALIDATION.log.jsonl)
+### Validation Log Schema (cross-model-validation.log.jsonl)
 
 ```json
 {
   "blind_spot_id": "BS-003",
-  "reviewer": "reviewer-1",
-  "model": "claude-opus-5",
-  "verdict": "CONFIRMED|REFUTED|PARTIAL|ADDITIONAL_FINDING",
+  "reviewer": "my-reviewer",
+  "command": "my-review-tool",
+  "exit_code": 0,
+  "verdict": "CONFIRMED|REFUTED|PARTIAL|ADDITIONAL_FINDING|UNPARSED",
   "notes": "string",
-  "additional_blind_spots": ["BS-new-001", "BS-new-002"],
+  "additional_blind_spots": ["BS-new-001"],
+  "stdout_excerpt": "string",
+  "error": "string or null",
   "timestamp": "ISO8601"
 }
 ```
 
-### Consensus Rules
+### Verdict Rules
 
-- **Confirmed**: ≥2 reviewers agree on falsification
-- **Refuted**: ≥2 reviewers find assumption was actually correct
-- **Partial**: Mixed verdicts — log as `CONTRADICTION`, flag for human review
-- **Additional**: New blind spots discovered by reviewers → add to register
+- **Parsed only on exit code 0**: a command that prints a verdict but exits
+  non-zero is recorded `UNPARSED` (with `exit_code` and `error`) — never counted.
+- **UNPARSED** (missing/invalid JSON verdict, non-zero exit, timeout): recorded
+  for honesty, excluded from review counts.
+- **Binding**: each parsed verdict is bound to the `blind_spot_id` of the payload
+  the reviewer received — a verdict for a different blind spot is not counted.
+- **Consensus (optional, for the agent)**: when multiple reviewers review the
+  same blind spot, agreement can be computed; disagreements log as
+  `CONTRADICTION` (Anti-Pattern #10). No ≥2-reviewer consensus requirement is
+  enforced by the CLI — a single real reviewer is a valid review.
+
+### NOT_RUN Semantics
+
+- No reviewer configured → no log written; report shows
+  `- NOT_RUN: no external reviewer command configured …`.
+- Explicitly disabled (`--no-cross-model` / `SELF_AUDIT_CROSS_MODEL=false`) →
+  distinct marker `- NOT_RUN: explicitly disabled …`.
+- No blind spots to review (reviewers configured but nothing to review) →
+  `- NOT_RUN: no blind spots to review …`.
+- Stale logs from prior runs are **removed** on every NOT_RUN path so they can
+  never masquerade as reviews that happened this run.
 
 ## Historical Trend Analysis (Deep Mode)
 
@@ -845,6 +894,7 @@ A search whose scope cannot be stated up front runs as `INCONCLUSIVE` / `check_s
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.0 | 2026-10-24 | Domain-adaptive layer: task/context resolution, subject-specific concept maps, layered analysis protocol, concept-distinction discipline, pattern candidates with independence dedupe + check-run gate, blind-spot candidates; finding/pattern schema v1; honesty fixes: cross-model `NOT_RUN` (real reviewer commands only, stale-log cleanup), deep-grader auto-pass fix, validator `--append`/`--concepts`; new eval case + unittest suite |
 | 1.2.0 | 2026-10-23 | Superset rigor: provenance + evidence cutoff, search_scope/negative-search discipline, measurement split, pre-mortem in all modes, coverage ledger, fix mode & write policy, stakes/target scope, redesigned report, Anti-Patterns #11–#20 |
 | 1.1.0 | 2026-10-22 | User-context calibration (USER_* categories), self-learning loop (KNOWN_FALSE), recurring-error detection, LU lifecycle, HTML dashboard |
 | 1.0.0 | 2026-10-22 | Initial release: 6-phase pipeline, 3 depth modes, cross-model validation, trend analysis, memory integration |

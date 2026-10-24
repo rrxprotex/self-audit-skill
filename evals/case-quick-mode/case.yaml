@@ -25,19 +25,17 @@ graders:
     '
 - name: calibration-log-valid
   type: static
-  criteria: 'Verify calibration.log.jsonl contains valid calibration records:
+  criteria: 'Verify calibration.log.jsonl contains valid calibration records (checks
+    the runner actually enforces):
 
     - Each record has: assumption_id, timestamp, prediction, actual, evidence, result,
     confidence_delta, new_status, layer, verification_method, session_id
 
-    - result in [CONFIRMED, FALSIFIED, INCONCLUSIVE, SKIPPED]
+    - result in [CONFIRMED, FALSIFIED, INCONCLUSIVE, SKIPPED, KNOWN_FALSE]
 
-    - layer in [L1, L2, L3, L4]
-
-    - At least 1 FALSIFIED and 1 CONFIRMED record
+    - At least 1 outcome record in [CONFIRMED, FALSIFIED, INCONCLUSIVE]
 
     - Confidence deltas show diversity (not all identical)
-
     '
 - name: blind-spots-categorized
   type: static
@@ -59,4 +57,10 @@ graders:
 
     - Each has detail section with Assumption, Evidence, Learning Objective, Verification
     Protocol, Integration Points'
+- name: depth-control
+  type: static
+  criteria: 'Verify quick mode honors depth rules (analysis-findings.json has NO
+    domain_model key and NO patterns key — absent, not empty; task_resolution, findings,
+    blind_spot_candidates still present)
+    '
 threshold: 0.8

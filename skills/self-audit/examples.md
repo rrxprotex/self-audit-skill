@@ -196,7 +196,8 @@ python ${CLAUDE_SKILL_DIR}/scripts/calibration-analytics.py \
 python ${CLAUDE_SKILL_DIR}/scripts/validate-assumptions.py \
   --assumptions .claude/knowledge/assumptions.json \
   --workspace . \
-  --output .claude/knowledge/calibration.log.jsonl
+  --output .claude/knowledge/calibration.log.jsonl \
+  --append
 ```
 
 ---

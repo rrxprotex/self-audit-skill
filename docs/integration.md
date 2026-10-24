@@ -672,4 +672,6 @@ for s in all_summaries:
 | Memory not persisting | Verify `.claude/projects/<slug>/memory/` writable |
 | Context not loading | Check `context-engineering` config, file paths |
 | Doubt seeds not working | Verify `doubt-driven-development` installed |
+| Domain layer unwanted | `export SELF_AUDIT_DOMAIN_LAYER=false` — disables the v1.3 layer entirely |
+| Cross-model shows NOT_RUN | Configure `SELF_AUDIT_EXTERNAL_REVIEWERS` or accept the honest not-run state |
 | CI calibration fails | Check permissions, API keys, workspace path |

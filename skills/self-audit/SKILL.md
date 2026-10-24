@@ -2,8 +2,8 @@
 name: self-audit
 description: Surfaces candidate unknowns and blind spots in a workspace — what the model doesn't know it doesn't know, AND what the user needs/knows/doesn't-know even when they can't articulate it — before implementation, review, or release. Use when asked to self-audit, run a calibration check, find blind spots, or answer "what am I missing?" / "what don't you know about this repo?", or before acting on high-stakes conclusions about a workspace. Runs structured epistemic calibration: extracts implicit assumptions (model + user), tests them against real evidence, maps blind spots by abstraction layer (L1-L4), synthesizes learnable units with verification protocols, persists calibrated knowledge to project memory. Read-only by default: writes only to knowledge/memory roots.
 when_to_use: "Starting a new session in a workspace; before major implementation or release; when asked 'what am I missing' or 'what don't you know about this repo'; when repeatedly surprised by same workspace patterns; when cross-session learning keeps resetting; when you need to audit your own knowledge boundaries before claiming expertise; when user intent is vague but workspace has strong implicit constraints; when user says 'I know what I want' but requirements keep shifting"
-argument-hint: "[--mode quick|standard|deep] [--workspace PATH] [--target workspace|plan|diff|last-answer] [--stakes low|medium|high] [--output-dir PATH] [--user-context]"
-arguments: "mode workspace target stakes output-dir user-context"
+argument-hint: "[--mode quick|standard|deep] [--workspace PATH] [--target workspace|plan|diff|last-answer] [--stakes low|medium|high] [--output-dir PATH] [--user-context] [--audit-purpose TEXT]"
+arguments: "mode workspace target stakes output-dir user-context audit-purpose"
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: "Bash(${CLAUDE_SKILL_DIR}/scripts/run-self-audit.py *) Glob Grep Read Write Edit Task Agent"
@@ -16,10 +16,10 @@ shell: bash
 metadata:
   category: "meta-learning"
   tags: ["epistemic-calibration", "workspace-analysis", "knowledge-discovery", "blind-spot-detection", "user-intent-modeling", "tacit-knowledge-extraction"]
-  version: "1.2.0"
+  version: "1.3.0"
   min-claude-version: "2.1.218"
 license: MIT
-compatibility: "Requires Python 3.10+, pytest, read/write access to .claude/ directory. Works on any workspace with code/docs/tests."
+compatibility: "Requires Python 3.10+ and read/write access to .claude/ (or configured knowledge/memory roots). Harness-agnostic: runs in CLI agents, IDEs, and desktop apps — no account or API key. Works on any workspace with code/docs/tests."
 ---
 
 # Self-Audit — Epistemic Calibration & Workspace Knowledge Discovery
@@ -83,7 +83,7 @@ Every finding, assumption, and conclusion must carry one of these labels:
 | **ASSUMED_FACT** | Model believed true without verification; confidence stated explicitly | "This function returns None on error" (confidence: 0.8) |
 | **UNVERIFIED_PATTERN** | Pattern inferred but not systematically checked | "All async functions use `await` correctly" (not grep-verified) |
 | **IMPLICIT_CONVENTION** | Unwritten rule discovered via deviation analysis | "Config keys use SCREAMING_SNAKE_CASE" (inferred from 8/10 files) |
-| **DOMAIN_GAP** | Missing domain knowledge the workspace assumes | "Songs use verse-chorus structure" (requires domain docs) |
+| **DOMAIN_GAP** | Missing domain knowledge the workspace assumes | "Orders require a fulfilled payment before shipment" (requires domain docs) |
 | **CALIBRATION_ERROR** | Confidence ≠ accuracy discovered via test | "Thought `config.get()` raises KeyError; actually returns None" |
 | **SPECULATION** | Plausible but insufficient evidence | "This module might be deprecated" (no deprecation marker found) |
 
@@ -114,7 +114,7 @@ Every finding must be tagged with its abstraction layer:
 | **L1: Syntax/Local** | Single file, function, line | "Missing type hint on line 42", "Hardcoded string 'TODO'" |
 | **L2: Pattern/Module** | Recurring pattern within a module/directory | "All services use dependency injection", "Tests use `arrange-act-assert`" |
 | **L3: Architecture/System** | Cross-module, system-wide invariants | "Event-driven architecture with Kafka", "Database per service" |
-| **L4: Domain Principle** | Business/domain logic, not code structure | "Songs use verse-chorus structure", "User consent required for data export" |
+| **L4: Domain Principle** | Business/domain logic, not code structure | "Orders require a fulfilled payment before shipment", "User consent required for data export" |
 
 **Rule:** No finding without L1-L4 tag. L3/L4 findings are higher leverage — prioritize them.
 
@@ -182,6 +182,55 @@ Standard (top 50) + **Pre-Mortem Protocol** (extended) + **Cross-Model Validatio
 Output: Full artifact suite + `CROSS_MODEL_VALIDATION.log` + `CALIBRATION_TREND_REPORT`.
 
 Default: **deep** for high-stakes work; per §7 the default follows `--stakes`, and `--mode` overrides explicitly. Low stakes may cap or skip the deep-only extensions (cross-model, trend) even in deep mode.
+
+## Domain-Adaptive Analysis Layer (v1.3)
+
+**The fixed method is the analysis and verification discipline above; the concepts, categories, distinction criteria, and domain model are built for the subject being analyzed.** Never apply one domain's category set to another subject; never present a constructed category as established knowledge.
+
+### Task & Context Resolution (before Phase 0)
+
+Resolve, before analysis: **stated outcome** (what the user explicitly asked for) / **inferred purpose** (likely underlying goal — labeled `INFERENCE`, recorded with its basis, never presented as user intent) / **object of analysis** / **resources and access limits** (what this run can actually read — `plan|diff|last-answer` targets have no CLI-side content ingestion; the flag records the target, the content is audited here in the agent workflow) / **complexity** (`SIMPLE|MULTISTEP|UNCERTAIN`) / **cost of error** / **depth needed** (per the mode mapping below) / **verification criteria** (how a correct result is confirmed). A gap between the stated ask and what the sources show is made visible, never silently resolved. Decision-blocking ambiguity: ask ONE short clarification; otherwise proceed with the uncertainty recorded. Simple tasks: two lines, no report section. Persisted via `analysis-findings.json` `task_resolution`.
+
+### Subject-Specific Concept Map
+
+Build for the analyzed subject: main concepts and sub-concepts, categories with classification criteria, components/functions/processes, relations and dependencies, distinguishing properties between similar concepts, operating conditions/limits/exceptions, candidate causes/effects and alternative explanations, evidence sources and open research questions, and elements not yet classifiable. **Select, extend, or omit category kinds as the subject demands** — never a fixed checklist across all domains. Use an established classification system when one fits; a newly constructed category is `PROPOSED`, marked provisional and requiring verification. The map records **what was examined, which concepts were separated by which criteria and why, and which parts are missing or unclassified**.
+
+### Layered Analysis
+
+The ten layers — Observation → Local structure → Conceptual classification → Pattern → System relations → Function/mechanism → Causal explanations → Alternative explanations → Boundaries/counterexamples → Conclusion/decision — are a **selection**, not a mandatory equal-depth template. Pick what the task needs; when a load-bearing layer was skipped, say so in the report.
+
+### Concept Distinction (required capability)
+
+For each defined concept, compare it with near-neighbors under the same parent category; **state the separating criteria**; consider multi-category membership; detect over-broad/over-narrow categories; flag overlapping or duplicated categories; propose category-system revision when insufficient. Two similar things are **never merged on similarity alone**; two differently-named things are **never split as separate mechanisms without examination**. Emit comparison tables when they help.
+
+### Pattern Discovery Across Sources
+
+Consider: recurring problems across files, decision drift between earlier and later choices, contradicting documents or instructions, recurring deficiency shapes, interdependent decisions, stated-purpose vs. working-practice mismatches, conceptual structures recurring across works, prior findings reinforced by new evidence, changes invalidating prior findings. Per pattern: linked findings, source references, repetition count and scope, common supporting features, weakening/contradicting evidence sought, alternative explanations weighed, importance. **Status gates:** `VERIFIED` requires ≥2 independent sources (identical copies are ONE source) AND the stated verification actually ran this session with cited evidence; `PROBABLE` ≥1 source with reasoning; `CANDIDATE` is a nomination to investigate. A single occurrence is never a recurring-pattern conclusion.
+
+### Blind-Spot Discovery (self-audit of the analysis)
+
+Systematically search: skipped dimensions the correct answer requires; missing sub-categories; confounded or wrongly-split concepts; important claims without evidence; conclusions resting on unverified assumptions; alternative explanations that would change the result; sources/counterexamples that could contradict the current reading; unchecked dependencies and boundary conditions; information missing relative to the task's purpose; areas unexaminable due to data/access/tool limits. Each named gap carries **why it matters** (which result it could change) and the **smallest useful check** (the cheapest probe that would settle it), prioritized by the existing risk formula (severity × layer weight). Reports never claim all unknowns are discovered — they state the inspected scope.
+
+### User-Context Discipline (extends Phase 0.5)
+
+The Phase 0.5 intent-reconstruction examples are **model hypotheses** — label them `USER_INFERRED`, keep them separate from explicit or repeatedly-observed user rules, require attributable evidence with stated uncertainty. Never build sensitive personal profiles or infer personal traits; never present inferences as confirmed user intent.
+
+### Honesty Bounds for the Layer
+
+Lexical/heuristic candidates from the CLI are `CANDIDATE` nominations only — promote them only with cited evidence and recorded reasoning. Verification-grade claims require the verification to have actually run this session. Unreachable sources are listed as access limits, never as examined. Cross-model validation exists only when a real external reviewer command runs; otherwise it is visibly `NOT_RUN` — never fabricated.
+
+### Mode Mapping (matches `domain_analysis.analysis_depth` exactly)
+
+| Capability | quick | standard | deep |
+|------------|-------|----------|------|
+| task_resolution | fast form | yes | yes |
+| domain_model | no (stakes=high: yes) | relevant categories | extended |
+| layered_analysis | no | yes | yes |
+| pattern_discovery | no | yes | yes + counter-evidence search |
+| blind_spot_search | priority risks only | prioritized gaps | full + verification plan |
+| max_layers | 3 | 6 (UNCERTAIN→10) | 10 |
+
+Presentation depth ≠ analysis depth: a deep analysis may still deliver a short executive summary with details in artifacts.
 
 ## Workflow (Phase-Based)
 
@@ -303,11 +352,11 @@ Default: **deep** for high-stakes work; per §7 the default follows `--stakes`, 
 | Assumption Type | Template | Example |
 |-----------------|----------|---------|
 | **Convention** | "All X follow pattern Y" | "All config files use YAML" |
-| **Behavioral** | "Function/module X does Y when Z" | "`generate()` returns a song object" |
+| **Behavioral** | "Function/module X does Y when Z" | "`serialize()` returns a JSON string" |
 | **Invariant** | "Condition X never occurs" | "No raw SQL in core module" |
 | **Delegation** | "Library/tool X handles Y" | "pytest-asyncio handles all async test cases" |
 | **Architectural** | "System follows pattern X" | "Workspace uses clean architecture layers" |
-| **Domain** | "Domain rule X applies" | "All Turkish pop songs use 126 BPM" |
+| **Domain** | "Domain rule X applies" | "All prices are stored in minor units (cents)" |
 | **USER_INTENT** | "User intends X based on workspace pattern Y" | "User intends explicit error handling via Result<T,E>" |
 | **USER_NEED** | "User needs X but workspace constrains Y" | "User needs async everywhere but sync calls exist" |
 | **USER_TACIT** | "User tacitly assumes X (encoded in workspace)" | "User assumes prices always in cents" |
@@ -375,7 +424,7 @@ Default: **deep** for high-stakes work; per §7 the default follows `--stakes`, 
    - `prediction`: What model/user expected (from assumption statement)
    - `actual`: What test observed
    - `evidence`: File paths, command output, line numbers — only what the tool actually returned
-   - `verification_method`: which §4 method ran (`code_execution` | `static_analysis` | `doc_test_crossref` | `memory_crosscheck` | `expert_query`)
+   - `verification_method`: which §4 method ran (`code_execution` | `static_analysis` | `doc_test_crossref` | `memory_crosscheck` | `expert_query`); `none` only for `check_status: SKIPPED` records where no check ran
    - `session_id`, `timestamp`
    - `search_scope` (any search-based test), `commands_ran`, `commands_assumed`
    - `check_status`: `RAN | BLOCKED | SKIPPED` — for `BLOCKED` also `block_reason` + `unblock_condition`

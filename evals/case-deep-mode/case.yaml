@@ -8,22 +8,15 @@ schema_version: '1.0'
 graders:
 - name: cross-model-validation
   type: static
-  criteria: 'Verify cross-model validation produced valid log:
+  criteria: 'Verify cross-model validation is honestly reported (checks the runner
+    actually enforces):
 
-    - .claude/knowledge/cross-model-validation.log.jsonl exists and is valid JSONL
+    - If cross-model-validation.log.jsonl exists and is non-empty: each record has blind_spot_id,
+    reviewer, command, verdict, notes, additional_blind_spots, timestamp; verdict parsed
+    from real reviewer output; >= 1 reviewer
 
-    - Each record has: blind_spot_id, reviewer, model, verdict, notes, additional_blind_spots,
-    timestamp
-
-    - verdict in [CONFIRMED, REFUTED, PARTIAL, ADDITIONAL_FINDING]
-
-    - At least 2 distinct reviewers (different model names)
-
-    - At least 1 blind spot with CONFIRMED from ≥2 reviewers
-
-    - Additional blind spots discovered by reviewers (additional_blind_spots not empty
-    for at least 1)
-
+    - If the log is missing or empty: the calibration report MUST carry the visible
+    NOT_RUN marker line (unrun validation must never be silently absent)
     '
 - name: trend-analysis
   type: static

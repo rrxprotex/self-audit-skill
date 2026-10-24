@@ -91,12 +91,22 @@ claude plugin validate ./skills/self-audit --strict --json
 
 ### Evals
 
+The default eval suite is **static** — it runs the skill's real CLI and grades the
+artifacts with deterministic graders. No API key, no account, no LLM judge:
+
 ```bash
-# Full eval suite (requires ANTHROPIC_API_KEY)
-claude plugin eval . --trust-plugin --threshold 0.8 --model claude-sonnet-5 --judge-model claude-haiku-4-5 --no-publish --max-cost-usd 10
+# Full static eval suite (no API key required)
+python .github/scripts/eval-runner.py --case all --repo-root .
 
 # Single case
-claude plugin eval . --trust-plugin --case case-quick-mode --threshold 0.8 --no-publish
+python .github/scripts/eval-runner.py --case quick-mode --repo-root .
+```
+
+Optionally, if you use Claude Code's LLM-judged eval harness (requires your own
+Claude credentials — never needed for CI or contributions):
+
+```bash
+claude plugin eval . --trust-plugin --threshold 0.8 --model claude-sonnet-5 --judge-model claude-haiku-4-5 --no-publish --max-cost-usd 10
 ```
 
 ### Manual Testing

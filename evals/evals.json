@@ -7,7 +7,8 @@
       "graders": [
         "case-quick-mode/graders/produces-artifacts.md",
         "case-quick-mode/graders/calibration-log-valid.md",
-        "case-quick-mode/graders/blind-spots-categorized.md"
+        "case-quick-mode/graders/blind-spots-categorized.md",
+        "case-quick-mode/graders/depth-control.md"
       ],
       "threshold": 0.8,
       "model": "claude-sonnet-5",
@@ -20,6 +21,17 @@
       "graders": [
         "case-deep-mode/graders/cross-model-validation.md",
         "case-deep-mode/graders/trend-analysis.md"
+      ],
+      "threshold": 0.8,
+      "model": "claude-sonnet-5",
+      "judge_model": "claude-haiku-4-5"
+    },
+    {
+      "id": "case-domain-layer",
+      "name": "Domain-Adaptive Layer",
+      "prompt_file": "case-domain-layer/prompt.md",
+      "graders": [
+        "case-domain-layer/graders/domain-layer-valid.md"
       ],
       "threshold": 0.8,
       "model": "claude-sonnet-5",

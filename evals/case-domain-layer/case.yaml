@@ -1,0 +1,31 @@
+name: case-domain-layer
+description: Domain-adaptive layer produces a schema-valid analysis report with task resolution, domain model, CANDIDATE-only patterns, and blind-spot candidates
+prompt: 'Run self-audit standard mode on this workspace. Produce analysis-findings.json
+  with task resolution, domain model, findings, pattern candidates, and blind-spot
+  candidates.
+
+  '
+schema_version: '1.0'
+graders:
+- name: domain-layer-valid
+  type: static
+  criteria: 'Verify .claude/knowledge/analysis-findings.json validates against the
+    v1.3 domain-layer schema:
+
+    - schema_version == "1"
+
+    - task_resolution.stated_outcome non-empty
+
+    - domain_model.concepts non-empty
+
+    - every finding has id (FIND-NNN), statement, category_path, layer (L1-L4),
+    evidence_status (OBSERVED|CANDIDATE|INFERRED|HYPOTHESIS|UNVERIFIED_CLAIM),
+    source_refs (list), confidence_band (HIGH|MEDIUM|LOW)
+
+    - all patterns have status == CANDIDATE (no agent available to promote)
+
+    - blind_spot_candidates non-empty; each with why_it_matters and smallest_useful_check
+
+    - validation_errors absent or empty
+    '
+threshold: 0.8

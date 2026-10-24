@@ -1,67 +1,63 @@
 # Grader: Cross-Model Validation
 
 ## Purpose
-Verify that deep mode performs cross-model adversarial validation and produces a valid validation log.
+Verify that deep mode reports cross-model review **honestly**: either real
+external reviewer records or a visible `NOT_RUN` state. (v1.3: reviewer
+identities/verdicts are never fabricated; a reviewer that did not run is
+never claimed.)
 
 ## Pass Criteria
-1. `.claude/knowledge/cross-model-validation.log.jsonl` exists and is valid JSONL
-2. Each record has: `blind_spot_id`, `reviewer`, `model`, `verdict`, `notes`, `additional_blind_spots`, `timestamp`
-3. `verdict` is one of: `CONFIRMED`, `REFUTED`, `PARTIAL`, `ADDITIONAL_FINDING`
-4. At least 2 reviewers (different model names)
-5. At least 1 blind spot has `verdict: CONFIRMED` from ≥2 reviewers
-6. If any `verdict: REFUTED`, corresponding blind spot flagged as contradiction
-7. `additional_blind_spots` array populated for at least 1 reviewer
+
+**State A — real reviews exist** (`cross-model-validation.log.jsonl` non-empty):
+1. Every record has: `blind_spot_id`, `reviewer`, `command`, `exit_code`,
+   `verdict`, `notes`, `additional_blind_spots`, `timestamp`
+2. The calibration report does NOT carry a `NOT_RUN:` marker
+   (a log + marker together is a stale-log contradiction → FAIL)
+3. At least one record is a **parsed review**: `exit_code == 0` AND
+   `verdict ∈ {CONFIRMED, REFUTED, PARTIAL, ADDITIONAL_FINDING}`
+   — ANY of these verdicts counts. A REFUTED review is a real review,
+   not a failure; confirmation is NOT required.
+4. At least one reviewer produced a parsed review
+
+**State B — honest not-run** (log missing or empty):
+5. The calibration report carries a visible `NOT_RUN:` marker line
+   (unconfigured / explicitly disabled / no blind spots to review)
 
 ## Fail Criteria
-- File missing or invalid JSONL
-- Missing required fields
-- Less than 2 reviewers
-- No consensus on any blind spot
-- All verdicts same (no adversarial value)
+- Log missing/empty AND no `NOT_RUN:` marker in the report (fabricated absence)
+- Log present AND `NOT_RUN:` marker present (stale-log contradiction)
+- Records missing required fields
+- Only non-zero-exit or `UNPARSED` records (a verdict printed by a failing
+  command is never a review — exit-code-gated)
+
+## Notes on honesty semantics
+- `verdict: UNPARSED` and non-zero `exit_code` records are honest noise from
+  failed reviewers: they are recorded and excluded from counts, but they do
+  NOT fail the case when at least one real parsed review exists.
+- Verdicts are bound to the `blind_spot_id` of the payload the reviewer
+  received; unparseable output never counts.
 
 ## Evaluation Method
 ```python
 import json
 
-records = []
-with open('.claude/knowledge/cross-model-validation.log.jsonl') as f:
-    for line in f:
-        if line.strip():
-            records.append(json.loads(line))
+records = [json.loads(l) for l in
+           open('.claude/knowledge/cross-model-validation.log.jsonl') if l.strip()]
+report = open('.claude/knowledge/calibration-report.md').read()
+has_marker = 'NOT_RUN:' in report
 
-assert len(records) > 0, "No validation records"
+assert records != [] or has_marker, "no log and no NOT_RUN marker"
+assert not (records and has_marker), "stale log contradicts NOT_RUN marker"
 
-required = ["blind_spot_id", "reviewer", "model", "verdict", "notes", "additional_blind_spots", "timestamp"]
-for r in records:
-    for field in required:
-        assert field in r, f"Missing field: {field}"
-    assert r["verdict"] in ["CONFIRMED", "REFUTED", "PARTIAL", "ADDITIONAL_FINDING"]
-
-# Check reviewers
-reviewers = set(r["reviewer"] for r in records)
-models = set(r["model"] for r in records)
-assert len(reviewers) >= 2, f"Expected ≥2 reviewers, got {len(reviewers)}"
-assert len(models) >= 2, f"Expected ≥2 models, got {len(models)}"
-
-# Check consensus
-by_blind_spot = {}
-for r in records:
-    bs = r["blind_spot_id"]
-    if bs not in by_blind_spot:
-        by_blind_spot[bs] = []
-    by_blind_spot[bs].append(r["verdict"])
-
-consensus_count = 0
-for bs, verdicts in by_blind_spot.items():
-    confirmed = verdicts.count("CONFIRMED")
-    if confirmed >= 2:
-        consensus_count += 1
-
-assert consensus_count > 0, "No blind spot with consensus from ≥2 reviewers"
-
-# Check additional findings
-additional_total = sum(len(r["additional_blind_spots"]) for r in records)
-assert additional_total > 0, "No additional blind spots discovered by reviewers"
-
-print(f"Valid: {len(records)} records, {len(reviewers)} reviewers, {consensus_count} consensus, {additional_total} additional findings")
+required = ["blind_spot_id", "reviewer", "command", "exit_code", "verdict",
+            "notes", "additional_blind_spots", "timestamp"]
+allowed = {"CONFIRMED", "REFUTED", "PARTIAL", "ADDITIONAL_FINDING"}
+if records:
+    for r in records:
+        for f in required:
+            assert f in r, f"Missing field: {f}"
+    parsed = [r for r in records
+              if r["exit_code"] == 0 and r["verdict"] in allowed]
+    assert parsed, "no parsed review (all UNPARSED or failed)"
+    assert {r["reviewer"] for r in parsed}, "no reviewer produced a review"
 ```

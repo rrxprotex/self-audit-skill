@@ -13,17 +13,32 @@ The Self-Audit skill is configured through multiple layers with clear precedence
 
 | Variable | Default | Type | Description |
 |----------|---------|------|-------------|
-| `SELF_AUDIT_MODE` | `deep` | `quick\|standard\|deep` | Default depth mode |
+| `SELF_AUDIT_MODE` | `deep` | `quick\|standard\|deep` | Default depth mode (derived from `SELF_AUDIT_STAKES` when `--stakes` is given) |
 | `SELF_AUDIT_WORKSPACE` | `${CLAUDE_PROJECT_DIR}` | path | Workspace root to audit |
 | `SELF_AUDIT_KNOWLEDGE_ROOT` | `${WORKSPACE}/.claude/knowledge/` | path | Output directory for artifacts |
 | `SELF_AUDIT_MEMORY_ROOT` | `${WORKSPACE}/.claude/projects/<slug>/memory/` | path | Memory system root |
+| `SELF_AUDIT_TARGET` | `workspace` | `workspace\|plan\|diff\|last-answer` | What is being audited (§7) |
+| `SELF_AUDIT_STAKES` | `medium` | `low\|medium\|high` | Verification budget; sets default mode (low→quick, medium→standard, high→deep) |
+| `SELF_AUDIT_SESSION_ID` | auto (`session-YYYYMMDD-HHMMSS`) | string | Session id used to group calibration records in trend analysis |
 | `SELF_AUDIT_CROSS_MODEL` | `true` | boolean | Enable cross-model validation (deep) |
 | `SELF_AUDIT_TREND_ANALYSIS` | `true` | boolean | Enable historical trend analysis (deep) |
-| `SELF_AUDIT_MAX_ASSUMPTIONS` | `100` | integer | Max assumptions to extract (deep) |
-| `SELF_AUDIT_QUICK_TOP_N` | `20` | integer | Top N assumptions for quick mode |
-| `SELF_AUDIT_BLIND_SPOT_THRESHOLD` | `0.5` | float | Min \|confidence_delta\| for blind spot |
+| `SELF_AUDIT_EXTERNAL_REVIEWERS` | unset | JSON | Real external reviewer commands (deep); unset = `NOT_RUN`, never fabricated |
+| `SELF_AUDIT_TREND_MIN_SESSIONS` | `2` | integer | Min sessions before trend direction is computed |
+| `SELF_AUDIT_MAX_ASSUMPTIONS` | `0` (mode default) | integer | Cap assumptions extracted/tested (0 = mode budget: quick 10 / standard 25 / deep 50) |
+| `SELF_AUDIT_QUICK_TOP_N` | `5` | integer | Blind spots ranked in quick mode |
+| `SELF_AUDIT_BLIND_SPOT_THRESHOLD` | `0.3` | float | Min \|confidence_delta\| for blind spot |
+| `SELF_AUDIT_USER_CONTEXT` | `false` | boolean | Also discover & calibrate user-context assumptions |
 | `SELF_AUDIT_VERBOSE` | `false` | boolean | Verbose logging |
 | `SELF_AUDIT_CALIBRATION_LOG_VERSION` | `1` | integer | Schema version for calibration log |
+| `SELF_AUDIT_DOMAIN_LAYER` | `true` | boolean | Domain-adaptive analysis layer (v1.3); `false` disables entirely |
+| `SELF_AUDIT_AUDIT_PURPOSE` | `''` | string | Stated outcome for task resolution (`--audit-purpose`); empty = inferred, labeled |
+| `SELF_AUDIT_EXTERNAL_REVIEWERS` | unset | JSON | `[{"name": "r1", "command": "my-review-cmd"}]` — real reviewer commands (deep); unset = `NOT_RUN`, never fabricated |
+
+**Budget rule (Depth Modes):** quick tests 10 assumptions / standard 25 / deep 50, chosen by
+verification priority (risk = impact × (1 − confidence)), plus every load-bearing claim.
+`SELF_AUDIT_MAX_ASSUMPTIONS` overrides the budget; under `--stakes high` load-bearing (L3/L4)
+claims are checked in full regardless of budget (stakes-cap-wins). Assumptions deferred over
+budget are counted and reported — never silently dropped.
 
 ### Boolean Values
 
@@ -38,20 +53,29 @@ Accepted: `true`, `false`, `yes`, `no`, `on`, `off`, `1`, `0` (case-insensitive)
 ## Skill Arguments (Frontmatter `arguments`)
 
 ```yaml
-arguments: "mode workspace output-dir"
+arguments: "mode workspace target stakes output-dir user-context"
 ```
 
 | Argument | Type | Description | Overrides |
 |----------|------|-------------|-----------|
-| `mode` | `quick\|standard\|deep` | Depth mode | `SELF_AUDIT_MODE` |
+| `mode` | `quick\|standard\|deep` | Depth mode (explicit value overrides stakes-derived default) | `SELF_AUDIT_MODE` |
 | `workspace` | path | Workspace root | `SELF_AUDIT_WORKSPACE` |
+| `target` | `workspace\|plan\|diff\|last-answer` | What is being audited (§7) | `SELF_AUDIT_TARGET` |
+| `stakes` | `low\|medium\|high` | Verification budget; sets default mode | `SELF_AUDIT_STAKES` |
 | `output-dir` | path | Knowledge artifacts output | `SELF_AUDIT_KNOWLEDGE_ROOT` |
+| `user-context` | flag | Enable user-context discovery & calibration | `SELF_AUDIT_USER_CONTEXT` |
+| `audit-purpose` | string | Stated outcome for task resolution | `SELF_AUDIT_AUDIT_PURPOSE` |
+
+Also available on `validate-assumptions.py`: `--append` (append to `--output` instead of truncating — use when targeting the append-only `calibration.log.jsonl`), `--concepts PATH` (domain-model JSON for lexical `CANDIDATE_CONFUSION` nomination).
 
 ### Usage Examples
 
 ```bash
 # Via skill invocation
 /self-audit --mode quick --workspace /path/to/project --output-dir /custom/output
+
+# Audit a plan instead of the workspace, at high stakes (stakes pick the mode: deep)
+/self-audit --target plan --stakes high "the plan text or a path"
 
 # Via environment variables
 export SELF_AUDIT_MODE=standard
@@ -88,18 +112,18 @@ assumption_types:
 
 depth_modes:
   quick:
-    max_assumptions: 15
+    max_assumptions: 10
     test_critical_only: true
-    top_blind_spots: 3
+    top_blind_spots: 5
   standard:
-    max_assumptions: 50
+    max_assumptions: 25
     test_critical_only: false
-    top_blind_spots: 10
+    top_blind_spots: 15
   deep:
-    max_assumptions: 100
+    max_assumptions: 50
     cross_model_reviewers: 2
     trend_analysis: true
-    top_blind_spots: 20
+    top_blind_spots: 15
 
 output:
   formats: [markdown, json]
@@ -121,9 +145,12 @@ integrations:
 python run-self-audit.py \
   --mode quick|standard|deep \
   --workspace /path/to/project \
+  --target workspace|plan|diff|last-answer \
+  --stakes low|medium|high \
   --output-dir /path/to/output \
   --no-cross-model \
   --no-trend \
+  --user-context \
   --verbose
 ```
 
@@ -218,9 +245,10 @@ Version 2 will add:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SELF_AUDIT_CROSS_MODEL_REVIEWERS` | `2` | Number of reviewer agents |
-| `SELF_AUDIT_CROSS_MODEL_MODELS` | `["claude-opus-5", "claude-sonnet-5"]` | Models to use |
-| `SELF_AUDIT_CROSS_MODEL_TIMEOUT` | `300` | Seconds per reviewer |
+| `SELF_AUDIT_EXTERNAL_REVIEWERS` | unset | JSON list of `{"name": str, "command": str}` — real reviewer commands (deep). Each receives the blind-spot payload as JSON on stdin and prints a JSON verdict; unset = `NOT_RUN`, never fabricated |
+| `SELF_AUDIT_CROSS_MODEL_TIMEOUT` | `300` | Seconds per reviewer command |
+
+`SELF_AUDIT_CROSS_MODEL_REVIEWERS` is deprecated in v1.3 (superseded by the reviewer list length) but still accepted without error.
 
 ## Trend Analysis Configuration
 
